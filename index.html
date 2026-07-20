@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>참나무 고목 지도</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; font-family:'Malgun Gothic', sans-serif; }
+  #map { width:100%; height:100%; }
+
+  #panel {
+    position:absolute; top:12px; left:12px; z-index:10;
+    background:#fff; padding:10px 12px; border-radius:8px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25); width:280px;
+  }
+  #panel.collapsed { width:auto; padding:6px 10px; }
+  #panel.collapsed #panelBody { display:none; }
+  #panelToggle {
+    display:block; width:100%; text-align:right; background:none;
+    border:none; cursor:pointer; font-size:13px; color:#555; padding:2px 0;
+  }
+  #panel input {
+    width:100%; box-sizing:border-box; padding:8px; font-size:14px;
+    border:1px solid #ccc; border-radius:4px;
+  }
+  #panel button {
+    width:100%; margin-top:6px; padding:8px; font-size:14px;
+    border:none; border-radius:4px; background:#FEE500; cursor:pointer;
+  }
+  #resultList { max-height:220px; overflow-y:auto; margin-top:8px; font-size:13px; }
+  #resultList div {
+    padding:6px 4px; border-bottom:1px solid #eee; cursor:pointer;
+  }
+  #resultList div:hover { background:#f5f5f5; }
+
+  #legend {
+    position:absolute; bottom:20px; left:12px; z-index:10;
+    background:#fff; padding:8px 10px; border-radius:8px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25); font-size:12px;
+  }
+  #legend div { margin-bottom:2px; }
+  #legend span { display:inline-block; width:12px; height:12px; margin-right:4px; vertical-align:middle; }
+
+  #locateBtn {
+    position:absolute; bottom:20px; right:12px; z-index:10;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
+  }
+  #locateBtn:active { background:#f0f0f0; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <button id="panelToggle" onclick="togglePanel()">▲ 접기</button>
+  <div id="panelBody">
+    <input type="text" id="keyword" placeholder="예: 원삼면 펜션, 두창저수지 등">
+    <button onclick="searchPlaces()">검색</button>
+    <div id="resultList"></div>
+  </div>
+</div>
+
+<div id="legend">
+  <div><span style="background:#1b5e20;"></span>9영급</div>
+  <div><span style="background:#2e7d32;"></span>8영급</div>
+  <div><span style="background:#43a047;"></span>7영급</div>
+  <div><span style="background:#81c784;"></span>6영급</div>
+  <div><span style="background:#c8e6c9;"></span>5영급</div>
+</div>
+
+<div id="map"></div>
+<button id="locateBtn" title="내 위치 찾기">📍</button>
+
+<!--
+  ⚠️ 아래 appkey= 뒤에 카카오 개발자센터에서 발급받은
+  "JavaScript 키"를 넣어주세요. (REST API 키 아님, JavaScript 키!)
+
+  발급 방법:
+  1) https://developers.kakao.com 접속 → 로그인 → [내 애플리케이션] → 애플리케이션 추가
+  2) 앱 만든 후 [앱 키] 탭에서 "JavaScript 키" 복사
+  3) [플랫폼] 탭 → Web 플랫폼 등록 → 이 파일을 실행할 주소를 등록
+     (예: 로컬에서 테스트하면 http://localhost:5500 같은 주소, 실제 배포하면 그 도메인)
+     * 도메인 등록을 안 하면 지도가 아예 안 뜹니다. 꼭 해주세요.
+-->
+<script type="text/javascript"
+  src="//dapi.kakao.com/v2/maps/sdk.js?appkey=b6be609f48c0c84193b5809a6b4fe72e&libraries=services"></script>
+
+<script>
+  function togglePanel() {
+    var panel = document.getElementById('panel');
+    var btn = document.getElementById('panelToggle');
+    panel.classList.toggle('collapsed');
+    btn.textContent = panel.classList.contains('collapsed') ? '▼ 검색' : '▲ 접기';
+  }
+
+  var mapContainer = document.getElementById('map');
+  var mapOption = {
+    center: new kakao.maps.LatLng(37.130, 127.330),
+    level: 6
+  };
+  var map = new kakao.maps.Map(mapContainer, mapOption);
+  var ps = new kakao.maps.services.Places();
+  var geocoder = new kakao.maps.services.Geocoder();
+  var searchMarkers = [];
+  var infowindow = new kakao.maps.InfoWindow({ zIndex: 2 });
+
+  function searchPlaces() {
+    var keyword = document.getElementById('keyword').value.trim();
+    if (!keyword) { alert('검색어를 입력해주세요.'); return; }
+    ps.keywordSearch(keyword, placesSearchCB);
+  }
+  document.getElementById('keyword').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') searchPlaces();
+  });
+
+  function placesSearchCB(data, status) {
+    searchMarkers.forEach(m => m.setMap(null));
+    searchMarkers = [];
+    var listEl = document.getElementById('resultList');
+    listEl.innerHTML = '';
+
+    if (status !== kakao.maps.services.Status.OK) {
+      listEl.innerHTML = '<div>검색 결과가 없습니다.</div>';
+      return;
+    }
+
+    var bounds = new kakao.maps.LatLngBounds();
+    data.forEach(function(place, i) {
+      var pos = new kakao.maps.LatLng(place.y, place.x);
+      var marker = new kakao.maps.Marker({ map: map, position: pos });
+      searchMarkers.push(marker);
+      bounds.extend(pos);
+
+      kakao.maps.event.addListener(marker, 'click', function() {
+        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + place.place_name + '</div>');
+        infowindow.open(map, marker);
+        map.setCenter(pos);
+      });
+
+      var row = document.createElement('div');
+      row.textContent = place.place_name + ' (' + place.address_name + ')';
+      row.onclick = function() {
+        map.setCenter(pos);
+        map.setLevel(4);
+        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + place.place_name + '</div>');
+        infowindow.open(map, marker);
+      };
+      listEl.appendChild(row);
+    });
+
+    map.setBounds(bounds);
+  }
+
+  var allFeatures = [];
+  var currentPolygons = [];
+  var ZOOM_LEVEL_THRESHOLD = 8;
+  var MAX_POLYGONS_ON_SCREEN = 4000;
+
+  var GRADE_COLORS = {
+    '9': '#1b5e20',
+    '8': '#2e7d32',
+    '7': '#43a047',
+    '6': '#81c784',
+    '5': '#c8e6c9'
+  };
+
+  function colorByGrade(props) {
+    var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
+    for (var g = 9; g >= 5; g--) {
+      if (grade.includes(String(g))) return GRADE_COLORS[String(g)];
+    }
+    return '#c8e6c9';
+  }
+
+  function getBbox(coordsList) {
+    var minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    coordsList.forEach(function(polyCoords) {
+      if (!polyCoords || !polyCoords[0]) return;
+      polyCoords[0].forEach(function(c) {
+        if (!c || c.length < 2) return;
+        if (c[0] < minLng) minLng = c[0];
+        if (c[0] > maxLng) maxLng = c[0];
+        if (c[1] < minLat) minLat = c[1];
+        if (c[1] > maxLat) maxLat = c[1];
+      });
+    });
+    return { minLng: minLng, minLat: minLat, maxLng: maxLng, maxLat: maxLat };
+  }
+
+  function bboxIntersectsBounds(bbox, bounds) {
+    var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+    return !(bbox.maxLng < sw.getLng() || bbox.minLng > ne.getLng() ||
+              bbox.maxLat < sw.getLat() || bbox.minLat > ne.getLat());
+  }
+
+  function clearCurrentPolygons() {
+    currentPolygons.forEach(function(p) { p.setMap(null); });
+    currentPolygons = [];
+  }
+
+  function renderVisiblePolygons() {
+    clearCurrentPolygons();
+
+    if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) return;
+    if (allFeatures.length === 0) return;
+
+    var bounds = map.getBounds();
+    var drawn = 0;
+
+    for (var i = 0; i < allFeatures.length; i++) {
+      if (drawn >= MAX_POLYGONS_ON_SCREEN) break;
+      let f = allFeatures[i];
+      if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
+
+      f.coordsList.forEach(function(polyCoords) {
+        if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
+        var path = polyCoords[0].map(c => new kakao.maps.LatLng(c[1], c[0]));
+        var polygon = new kakao.maps.Polygon({
+          map: map,
+          path: path,
+          strokeWeight: 1,
+          strokeColor: '#1b5e20',
+          strokeOpacity: 0.8,
+          fillColor: colorByGrade(f.properties),
+          fillOpacity: 0.55
+        });
+        currentPolygons.push(polygon);
+
+        kakao.maps.event.addListener(polygon, 'click', function() {
+          var p = f.properties;
+          infowindow.setContent(
+            '<div style="padding:6px;font-size:12px;">' +
+            (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+            '</div>'
+          );
+          infowindow.setPosition(path[0]);
+          infowindow.open(map);
+        });
+      });
+      drawn++;
+    }
+  }
+
+  var myLocationMarker = null;
+
+  function locateMe() {
+    if (!navigator.geolocation) {
+      alert('이 브라우저에서는 위치 찾기를 지원하지 않습니다.');
+      return;
+    }
+    var btn = document.getElementById('locateBtn');
+    btn.textContent = '⏳';
+
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        btn.textContent = '📍';
+        var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
+        map.setCenter(here);
+        map.setLevel(4);
+
+        if (myLocationMarker) myLocationMarker.setMap(null);
+        myLocationMarker = new kakao.maps.Marker({
+          map: map,
+          position: here,
+          image: new kakao.maps.MarkerImage(
+            'data:image/svg+xml;utf-8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="8" fill="%234285F4" stroke="white" stroke-width="3"/></svg>'
+            ),
+            new kakao.maps.Size(24, 24)
+          )
+        });
+      },
+      function(err) {
+        btn.textContent = '📍';
+        alert('위치를 가져올 수 없습니다. 브라우저의 위치 권한을 허용해주세요.');
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
+  document.getElementById('locateBtn').addEventListener('click', locateMe);
+
+  function loadForestData() {
+    fetch('oak_forest.geojson')
+      .then(res => {
+        if (!res.ok) throw new Error('geojson 없음');
+        return res.json();
+      })
+      .then(geojson => {
+        var skipped = 0;
+
+        allFeatures = geojson.features.reduce(function(acc, feature) {
+          try {
+            if (!feature.geometry || !feature.geometry.coordinates ||
+                feature.geometry.coordinates.length === 0) {
+              skipped++; return acc;
+            }
+
+            var coordsList = feature.geometry.type === 'Polygon'
+              ? [feature.geometry.coordinates]
+              : feature.geometry.coordinates;
+
+            var valid = coordsList.every(function(polyCoords) {
+              return polyCoords && polyCoords[0] && polyCoords[0].length >= 4;
+            });
+            if (!valid) { skipped++; return acc; }
+
+            acc.push({
+              coordsList: coordsList,
+              bbox: getBbox(coordsList),
+              properties: feature.properties
+            });
+          } catch (e) {
+            skipped++;
+          }
+          return acc;
+        }, []);
+
+        console.log('불러온 폴리곤:', allFeatures.length, '/ 스킵된(깨진) 폴리곤:', skipped);
+
+        kakao.maps.event.addListener(map, 'idle', renderVisiblePolygons);
+        renderVisiblePolygons();
+      })
+      .catch(err => {
+        console.log('oak_forest.geojson을 아직 못 찾았습니다. (정상 — 파일 넣기 전까지는 지도+검색만 동작합니다)', err);
+      });
+  }
+
+  loadForestData();
+</script>
+
+</body>
+</html>
