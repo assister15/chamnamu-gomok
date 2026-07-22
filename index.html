@@ -38,8 +38,8 @@
     background:#fff; padding:8px 10px; border-radius:8px;
     box-shadow:0 2px 8px rgba(0,0,0,0.25); font-size:12px;
   }
-  #legend div { margin-bottom:2px; }
-  #legend span { display:inline-block; width:12px; height:12px; margin-right:4px; vertical-align:middle; }
+  #legend div { margin-bottom:4px; }
+  #legend span { display:inline-block; width:18px; height:18px; margin-right:6px; vertical-align:middle; border:1px solid rgba(0,0,0,0.35); border-radius:2px; }
 
   #locateBtn {
     position:fixed; bottom:20px; right:12px; z-index:20;
@@ -62,11 +62,11 @@
 </div>
 
 <div id="legend">
-  <div><span style="background:#1b5e20;"></span>9영급</div>
-  <div><span style="background:#2e7d32;"></span>8영급</div>
-  <div><span style="background:#43a047;"></span>7영급</div>
-  <div><span style="background:#81c784;"></span>6영급</div>
-  <div><span style="background:#c8e6c9;"></span>5영급</div>
+  <div><span style="background:#0b3d0f;"></span>9영급</div>
+  <div><span style="background:#1b5e20;"></span>8영급</div>
+  <div><span style="background:#4caf50;"></span>7영급</div>
+  <div><span style="background:#a5d6a7;"></span>6영급</div>
+  <div><span style="background:#eef7ee;"></span>5영급</div>
 </div>
 
 <div id="map"></div>
@@ -108,42 +108,82 @@
   function searchPlaces() {
     var keyword = document.getElementById('keyword').value.trim();
     if (!keyword) { alert('검색어를 입력해주세요.'); return; }
-    ps.keywordSearch(keyword, placesSearchCB);
+
+    var combined = [];
+    var doneCount = 0;
+    var TOTAL_CALLS = 2;
+
+    function onOneDone() {
+      doneCount++;
+      if (doneCount >= TOTAL_CALLS) renderCombinedResults(combined);
+    }
+
+    // 1) 상호명/장소명 검색 (예: 지성고깃집, 원삼면 펜션)
+    ps.keywordSearch(keyword, function(data, status) {
+      if (status === kakao.maps.services.Status.OK) {
+        data.forEach(function(place) {
+          combined.push({
+            title: place.place_name,
+            subtitle: place.address_name,
+            x: place.x,
+            y: place.y
+          });
+        });
+      }
+      onOneDone();
+    });
+
+    // 2) 주소 검색 (예: 경기 용인시 처인구 ○○로 123)
+    geocoder.addressSearch(keyword, function(data, status) {
+      if (status === kakao.maps.services.Status.OK) {
+        data.forEach(function(addr) {
+          var roadAddr = addr.road_address ? addr.road_address.address_name : null;
+          combined.push({
+            title: roadAddr || addr.address_name,
+            subtitle: roadAddr ? addr.address_name : '지번 주소',
+            x: addr.x,
+            y: addr.y
+          });
+        });
+      }
+      onOneDone();
+    });
   }
   document.getElementById('keyword').addEventListener('keydown', function(e){
     if (e.key === 'Enter') searchPlaces();
   });
 
-  function placesSearchCB(data, status) {
+  function renderCombinedResults(results) {
     searchMarkers.forEach(m => m.setMap(null));
     searchMarkers = [];
     var listEl = document.getElementById('resultList');
     listEl.innerHTML = '';
 
-    if (status !== kakao.maps.services.Status.OK) {
+    if (results.length === 0) {
       listEl.innerHTML = '<div>검색 결과가 없습니다.</div>';
       return;
     }
 
     var bounds = new kakao.maps.LatLngBounds();
-    data.forEach(function(place, i) {
-      var pos = new kakao.maps.LatLng(place.y, place.x);
+    results.forEach(function(item) {
+      var pos = new kakao.maps.LatLng(item.y, item.x);
       var marker = new kakao.maps.Marker({ map: map, position: pos });
       searchMarkers.push(marker);
       bounds.extend(pos);
 
       kakao.maps.event.addListener(marker, 'click', function() {
-        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + place.place_name + '</div>');
+        suppressNextMapClick = true;
+        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + item.title + '</div>');
         infowindow.open(map, marker);
         map.setCenter(pos);
       });
 
       var row = document.createElement('div');
-      row.textContent = place.place_name + ' (' + place.address_name + ')';
+      row.textContent = item.title + ' (' + item.subtitle + ')';
       row.onclick = function() {
         map.setCenter(pos);
         map.setLevel(4);
-        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + place.place_name + '</div>');
+        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + item.title + '</div>');
         infowindow.open(map, marker);
       };
       listEl.appendChild(row);
@@ -152,17 +192,26 @@
     map.setBounds(bounds);
   }
 
+  // 지도 빈 곳 클릭 시 검색 마커와 말풍선 초기화
+  var suppressNextMapClick = false;
+  kakao.maps.event.addListener(map, 'click', function() {
+    if (suppressNextMapClick) { suppressNextMapClick = false; return; }
+    infowindow.close();
+    searchMarkers.forEach(m => m.setMap(null));
+    searchMarkers = [];
+  });
+
   var allFeatures = [];
   var currentPolygons = [];
   var ZOOM_LEVEL_THRESHOLD = 8;
   var MAX_POLYGONS_ON_SCREEN = 4000;
 
   var GRADE_COLORS = {
-    '9': '#1b5e20',
-    '8': '#2e7d32',
-    '7': '#43a047',
-    '6': '#81c784',
-    '5': '#c8e6c9'
+    '9': '#0b3d0f',
+    '8': '#1b5e20',
+    '7': '#4caf50',
+    '6': '#a5d6a7',
+    '5': '#eef7ee'
   };
 
   function colorByGrade(props) {
@@ -170,7 +219,7 @@
     for (var g = 9; g >= 5; g--) {
       if (grade.includes(String(g))) return GRADE_COLORS[String(g)];
     }
-    return '#c8e6c9';
+    return '#eef7ee';
   }
 
   function getBbox(coordsList) {
@@ -228,6 +277,7 @@
         currentPolygons.push(polygon);
 
         kakao.maps.event.addListener(polygon, 'click', function() {
+          suppressNextMapClick = true;
           var p = f.properties;
           infowindow.setContent(
             '<div style="padding:6px;font-size:12px;">' +
