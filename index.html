@@ -62,11 +62,15 @@
 </div>
 
 <div id="legend">
-  <div><span style="background:#0b3d0f;"></span>9영급</div>
-  <div><span style="background:#1b5e20;"></span>8영급</div>
-  <div><span style="background:#4caf50;"></span>7영급</div>
-  <div><span style="background:#a5d6a7;"></span>6영급</div>
-  <div><span style="background:#eef7ee;"></span>5영급</div>
+  <div><span style="background:#0e3211;"></span>9영급</div>
+  <div><span style="background:#18511c;"></span>8영급</div>
+  <div><span style="background:#217027;"></span>7영급</div>
+  <div><span style="background:#2a8f32;"></span>6영급</div>
+  <div><span style="background:#33af3d;"></span>5영급</div>
+  <div><span style="background:#47c952;"></span>4영급</div>
+  <div><span style="background:#7ad882;"></span>3영급</div>
+  <div><span style="background:#ade7b2;"></span>2영급</div>
+  <div><span style="background:#e0f6e2;"></span>1영급</div>
 </div>
 
 <div id="map"></div>
@@ -207,15 +211,15 @@
   var MAX_POLYGONS_ON_SCREEN = 4000;
 
   var GRADE_COLORS = {
-    '9': '#0b3d0f',
-    '8': '#185c1d',
-    '7': '#2e7d32',
-    '6': '#4caf50',
-    '5': '#7cc47f',
-    '4': '#a5d6a7',
-    '3': '#c8e6c9',
-    '2': '#e0f2e1',
-    '1': '#f2f9f2'
+    '9': '#0e3211',
+    '8': '#18511c',
+    '7': '#217027',
+    '6': '#2a8f32',
+    '5': '#33af3d',
+    '4': '#47c952',
+    '3': '#7ad882',
+    '2': '#ade7b2',
+    '1': '#e0f6e2'
   };
 
   function colorByGrade(props) {
@@ -223,7 +227,7 @@
     for (var g = 9; g >= 1; g--) {
       if (grade.includes(String(g))) return GRADE_COLORS[String(g)];
     }
-    return '#eef7ee';
+    return '#e0f6e2';
   }
 
   function getBbox(coordsList) {
