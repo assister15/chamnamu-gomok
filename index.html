@@ -62,15 +62,15 @@
 </div>
 
 <div id="legend">
-  <div><span style="background:#0e3211;"></span>9영급</div>
-  <div><span style="background:#18511c;"></span>8영급</div>
-  <div><span style="background:#217027;"></span>7영급</div>
-  <div><span style="background:#2a8f32;"></span>6영급</div>
-  <div><span style="background:#33af3d;"></span>5영급</div>
-  <div><span style="background:#47c952;"></span>4영급</div>
-  <div><span style="background:#7ad882;"></span>3영급</div>
-  <div><span style="background:#ade7b2;"></span>2영급</div>
-  <div><span style="background:#e0f6e2;"></span>1영급</div>
+  <div><span style="background:#2c0a43;"></span>9영급</div>
+  <div><span style="background:#4b1575;"></span>8영급</div>
+  <div><span style="background:#6823a4;"></span>7영급</div>
+  <div><span style="background:#8237cd;"></span>6영급</div>
+  <div><span style="background:#a071d6;"></span>5영급</div>
+  <div><span style="background:#cfc2e0;"></span>4영급</div>
+  <div><span style="background:#dcd4e7;"></span>3영급</div>
+  <div><span style="background:#e7e2ee;"></span>2영급</div>
+  <div><span style="background:#f2eff5;"></span>1영급</div>
 </div>
 
 <div id="map"></div>
@@ -211,15 +211,15 @@
   var MAX_POLYGONS_ON_SCREEN = 4000;
 
   var GRADE_COLORS = {
-    '9': '#0e3211',
-    '8': '#18511c',
-    '7': '#217027',
-    '6': '#2a8f32',
-    '5': '#33af3d',
-    '4': '#47c952',
-    '3': '#7ad882',
-    '2': '#ade7b2',
-    '1': '#e0f6e2'
+    '9': '#2c0a43',
+    '8': '#4b1575',
+    '7': '#6823a4',
+    '6': '#8237cd',
+    '5': '#a071d6',
+    '4': '#cfc2e0',
+    '3': '#dcd4e7',
+    '2': '#e7e2ee',
+    '1': '#f2eff5'
   };
 
   function colorByGrade(props) {
@@ -227,7 +227,7 @@
     for (var g = 9; g >= 1; g--) {
       if (grade.includes(String(g))) return GRADE_COLORS[String(g)];
     }
-    return '#e0f6e2';
+    return '#f2eff5';
   }
 
   function getBbox(coordsList) {
@@ -277,7 +277,7 @@
           map: map,
           path: path,
           strokeWeight: 1,
-          strokeColor: '#1b5e20',
+          strokeColor: '#4b1575',
           strokeOpacity: 0.8,
           fillColor: colorByGrade(f.properties),
           fillOpacity: 0.55
