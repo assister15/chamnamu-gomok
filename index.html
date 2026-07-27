@@ -421,6 +421,33 @@
   }
 
   loadForestData();
+
+  // 페이지 최초 로드 시 내 위치로 자동 이동 시도 (실패해도 조용히 기본 위치 유지)
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
+        map.setCenter(here);
+        map.setLevel(4);
+
+        if (myLocationMarker) myLocationMarker.setMap(null);
+        myLocationMarker = new kakao.maps.Marker({
+          map: map,
+          position: here,
+          image: new kakao.maps.MarkerImage(
+            'data:image/svg+xml;utf-8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="8" fill="%234285F4" stroke="white" stroke-width="3"/></svg>'
+            ),
+            new kakao.maps.Size(24, 24)
+          )
+        });
+      },
+      function(err) {
+        // 위치 권한 거부 또는 실패 시 아무 알림 없이 기본 중심 위치 유지
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
 </script>
 
 </body>
