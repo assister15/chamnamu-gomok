@@ -208,15 +208,19 @@
 
   var GRADE_COLORS = {
     '9': '#0b3d0f',
-    '8': '#1b5e20',
-    '7': '#4caf50',
-    '6': '#a5d6a7',
-    '5': '#eef7ee'
+    '8': '#185c1d',
+    '7': '#2e7d32',
+    '6': '#4caf50',
+    '5': '#7cc47f',
+    '4': '#a5d6a7',
+    '3': '#c8e6c9',
+    '2': '#e0f2e1',
+    '1': '#f2f9f2'
   };
 
   function colorByGrade(props) {
     var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
-    for (var g = 9; g >= 5; g--) {
+    for (var g = 9; g >= 1; g--) {
       if (grade.includes(String(g))) return GRADE_COLORS[String(g)];
     }
     return '#eef7ee';
@@ -331,10 +335,15 @@
   document.getElementById('locateBtn').addEventListener('click', locateMe);
 
   function loadForestData() {
-    fetch('oak_forest.geojson')
+    fetch('oak_forest.geojson.gz')
       .then(res => {
-        if (!res.ok) throw new Error('geojson 없음');
-        return res.json();
+        if (!res.ok) throw new Error('geojson.gz 없음');
+        return res.arrayBuffer();
+      })
+      .then(buffer => {
+        var ds = new DecompressionStream('gzip');
+        var stream = new Blob([buffer]).stream().pipeThrough(ds);
+        return new Response(stream).json();
       })
       .then(geojson => {
         var skipped = 0;
