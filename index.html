@@ -369,54 +369,119 @@
   }
   document.getElementById('locateBtn').addEventListener('click', locateMe);
 
-  function loadForestData() {
-    fetch('oak_forest.geojson.gz')
-      .then(res => {
-        if (!res.ok) throw new Error('geojson.gz 없음');
+  function transformFeatures(features) {
+    var out = [];
+    var skipped = 0;
+    features.forEach(function(feature) {
+      try {
+        if (!feature.geometry || !feature.geometry.coordinates ||
+            feature.geometry.coordinates.length === 0) {
+          skipped++; return;
+        }
+        var coordsList = feature.geometry.type === 'Polygon'
+          ? [feature.geometry.coordinates]
+          : feature.geometry.coordinates;
+
+        var valid = coordsList.every(function(polyCoords) {
+          return polyCoords && polyCoords[0] && polyCoords[0].length >= 4;
+        });
+        if (!valid) { skipped++; return; }
+
+        out.push({
+          coordsList: coordsList,
+          bbox: getBbox(coordsList),
+          properties: feature.properties
+        });
+      } catch (e) {
+        skipped++;
+      }
+    });
+    if (skipped > 0) console.log('스킵된(깨진) 폴리곤:', skipped);
+    return out;
+  }
+
+  var tileManifest = null;   // { tileSize, tiles: { "tx_ty": {bounds, count} } }
+  var loadedTileIds = {};    // tileId -> true (이미 불러온 타일)
+  var pendingTileIds = {};   // tileId -> true (지금 불러오는 중인 타일, 중복 요청 방지)
+
+  function getTileIdsForBounds(bounds, tileSize) {
+    var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+    var txMin = Math.floor(sw.getLng() / tileSize);
+    var txMax = Math.floor(ne.getLng() / tileSize);
+    var tyMin = Math.floor(sw.getLat() / tileSize);
+    var tyMax = Math.floor(ne.getLat() / tileSize);
+    var ids = [];
+    for (var tx = txMin; tx <= txMax; tx++) {
+      for (var ty = tyMin; ty <= tyMax; ty++) {
+        ids.push(tx + '_' + ty);
+      }
+    }
+    return ids;
+  }
+
+  function fetchTile(tileId) {
+    pendingTileIds[tileId] = true;
+    return fetch('tiles/tile_' + tileId + '.geojson.gz')
+      .then(function(res) {
+        if (!res.ok) throw new Error('타일 없음: ' + tileId);
         return res.arrayBuffer();
       })
-      .then(buffer => {
+      .then(function(buffer) {
         var ds = new DecompressionStream('gzip');
         var stream = new Blob([buffer]).stream().pipeThrough(ds);
         return new Response(stream).json();
       })
-      .then(geojson => {
-        var skipped = 0;
-
-        allFeatures = geojson.features.reduce(function(acc, feature) {
-          try {
-            if (!feature.geometry || !feature.geometry.coordinates ||
-                feature.geometry.coordinates.length === 0) {
-              skipped++; return acc;
-            }
-
-            var coordsList = feature.geometry.type === 'Polygon'
-              ? [feature.geometry.coordinates]
-              : feature.geometry.coordinates;
-
-            var valid = coordsList.every(function(polyCoords) {
-              return polyCoords && polyCoords[0] && polyCoords[0].length >= 4;
-            });
-            if (!valid) { skipped++; return acc; }
-
-            acc.push({
-              coordsList: coordsList,
-              bbox: getBbox(coordsList),
-              properties: feature.properties
-            });
-          } catch (e) {
-            skipped++;
-          }
-          return acc;
-        }, []);
-
-        console.log('불러온 폴리곤:', allFeatures.length, '/ 스킵된(깨진) 폴리곤:', skipped);
-
-        kakao.maps.event.addListener(map, 'idle', renderVisiblePolygons);
-        renderVisiblePolygons();
+      .then(function(geojson) {
+        var transformed = transformFeatures(geojson.features);
+        allFeatures = allFeatures.concat(transformed);
+        loadedTileIds[tileId] = true;
       })
-      .catch(err => {
-        console.log('oak_forest.geojson을 아직 못 찾았습니다. (정상 — 파일 넣기 전까지는 지도+검색만 동작합니다)', err);
+      .catch(function(err) {
+        // 해당 격자에 데이터가 아예 없는 지역(바다, 도심 등)일 수 있음 — 정상
+        loadedTileIds[tileId] = true; // 재요청 방지
+      })
+      .finally(function() {
+        delete pendingTileIds[tileId];
+      });
+  }
+
+  function onMapIdle() {
+    if (!tileManifest) return;
+
+    if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) {
+      clearCurrentPolygons();
+      return;
+    }
+
+    var bounds = map.getBounds();
+    var neededIds = getTileIdsForBounds(bounds, tileManifest.tileSize);
+    var toFetch = neededIds.filter(function(id) {
+      return tileManifest.tiles[id] && !loadedTileIds[id] && !pendingTileIds[id];
+    });
+
+    // 이미 불러온 타일 기준으로 우선 한번 그려서 즉시 반응하게 함
+    renderVisiblePolygons();
+
+    if (toFetch.length > 0) {
+      Promise.all(toFetch.map(fetchTile)).then(function() {
+        renderVisiblePolygons();
+      });
+    }
+  }
+
+  function loadForestData() {
+    fetch('tiles/manifest.json')
+      .then(function(res) {
+        if (!res.ok) throw new Error('manifest.json 없음');
+        return res.json();
+      })
+      .then(function(manifest) {
+        tileManifest = manifest;
+        kakao.maps.event.addListener(map, 'idle', onMapIdle);
+        onMapIdle();
+      })
+      .catch(function(err) {
+        console.log('tiles/manifest.json을 아직 못 찾았습니다. (정상 — 파일 넣기 전까지는 지도+검색만 동작합니다)', err);
       });
   }
 
