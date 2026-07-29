@@ -295,40 +295,51 @@
 
     var bounds = map.getBounds();
     var drawn = 0;
+    var groups = {}; // "수종||영급" -> { paths: [LatLng배열, ...], properties }
 
     for (var i = 0; i < allFeatures.length; i++) {
       if (drawn >= MAX_POLYGONS_ON_SCREEN) break;
       let f = allFeatures[i];
       if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
 
+      var key = (f.properties.KOFTR_NM || '') + '||' + (f.properties.AGCLS_NM || f.properties.AGCLS_CD || '');
+      if (!groups[key]) {
+        groups[key] = { paths: [], properties: f.properties };
+      }
+
       f.coordsList.forEach(function(polyCoords) {
         if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
         var path = polyCoords[0].map(c => new kakao.maps.LatLng(c[1], c[0]));
-        var polygon = new kakao.maps.Polygon({
-          map: map,
-          path: path,
-          strokeWeight: 1,
-          strokeColor: '#4b1575',
-          strokeOpacity: 0.8,
-          fillColor: colorByGrade(f.properties),
-          fillOpacity: 0.55
-        });
-        currentPolygons.push(polygon);
-
-        kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
-          suppressNextMapClick = true;
-          var p = f.properties;
-          infowindow.setContent(
-            '<div style="padding:6px;font-size:12px;">' +
-            (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
-            '</div>'
-          );
-          infowindow.setPosition(mouseEvent.latLng);
-          infowindow.open(map);
-        });
+        groups[key].paths.push(path);
       });
       drawn++;
     }
+
+    Object.keys(groups).forEach(function(key) {
+      var g = groups[key];
+      var polygon = new kakao.maps.Polygon({
+        map: map,
+        path: g.paths,
+        strokeWeight: 1,
+        strokeColor: '#4b1575',
+        strokeOpacity: 0.8,
+        fillColor: colorByGrade(g.properties),
+        fillOpacity: 0.55
+      });
+      currentPolygons.push(polygon);
+
+      kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
+        suppressNextMapClick = true;
+        var p = g.properties;
+        infowindow.setContent(
+          '<div style="padding:6px;font-size:12px;">' +
+          (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+          '</div>'
+        );
+        infowindow.setPosition(mouseEvent.latLng);
+        infowindow.open(map);
+      });
+    });
   }
 
   var myLocationMarker = null;
