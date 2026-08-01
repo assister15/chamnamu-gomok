@@ -86,9 +86,19 @@
   #roadviewPanel {
     position:fixed; top:0; left:0; width:100%; height:100%;
     z-index:50; display:none; background:#000;
+    flex-direction:column;
   }
-  #roadviewPanel.active { display:block; }
-  #roadviewContainer { width:100%; height:100%; }
+  #roadviewPanel.active { display:flex; }
+  #roadviewContainer { width:100%; flex:1 1 auto; min-height:0; }
+  #roadviewMinimap {
+    width:100%; height:140px; flex:0 0 140px; position:relative;
+    border-top:2px solid #fff;
+  }
+  #roadviewHeadingArrow {
+    position:absolute; top:50%; left:50%; z-index:5; pointer-events:none;
+    transform:translate(-50%,-50%) rotate(0deg);
+    font-size:26px; color:#e53935; text-shadow:0 0 3px #fff, 0 0 3px #fff;
+  }
   #roadviewCloseBtn {
     position:absolute; top:12px; right:12px; z-index:51;
     width:40px; height:40px; border-radius:50%; border:none;
@@ -144,6 +154,9 @@
 <div id="roadviewPanel">
   <button id="roadviewCloseBtn">✕</button>
   <div id="roadviewContainer"></div>
+  <div id="roadviewMinimap">
+    <div id="roadviewHeadingArrow">▲</div>
+  </div>
 </div>
 
 <!--
@@ -442,6 +455,8 @@
   var roadviewClient = new kakao.maps.RoadviewClient();
   var roadview = null;
   var roadviewModeActive = false;
+  var roadviewMinimap = null;
+  var roadviewMinimapMarker = null;
 
   function toggleRoadviewMode() {
     var btn = document.getElementById('roadviewBtn');
@@ -457,10 +472,35 @@
         return;
       }
       document.getElementById('roadviewPanel').classList.add('active');
-      if (!roadview) {
+
+      var firstTime = !roadview;
+      if (firstTime) {
         roadview = new kakao.maps.Roadview(document.getElementById('roadviewContainer'));
+        roadviewMinimap = new kakao.maps.Map(document.getElementById('roadviewMinimap'), {
+          center: latlng,
+          level: 3
+        });
+        roadviewMinimapMarker = new kakao.maps.Marker({ map: roadviewMinimap, position: latlng });
+
+        kakao.maps.event.addListener(roadview, 'position_changed', function() {
+          var pos = roadview.getPosition();
+          roadviewMinimap.setCenter(pos);
+          roadviewMinimapMarker.setPosition(pos);
+        });
+        kakao.maps.event.addListener(roadview, 'viewpoint_changed', function() {
+          var vp = roadview.getViewpoint();
+          var arrow = document.getElementById('roadviewHeadingArrow');
+          arrow.style.transform = 'translate(-50%,-50%) rotate(' + vp.pan + 'deg)';
+        });
       }
       roadview.setPanoId(panoId, latlng);
+
+      // 지도 컨테이너가 방금 화면에 나타났으므로 크기 재계산
+      setTimeout(function() {
+        roadview.relayout();
+        roadviewMinimap.relayout();
+        roadviewMinimap.setCenter(latlng);
+      }, 0);
     });
   }
 
