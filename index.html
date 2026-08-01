@@ -58,14 +58,14 @@
     cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
   }
   #locateBtn:active { background:#f0f0f0; }
-  #trackBtn {
+  #roadviewBtn {
     position:fixed; bottom:72px; right:12px; z-index:20;
     width:44px; height:44px; border-radius:50%; border:none;
     background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
-    cursor:pointer; font-size:22px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
   }
-  #trackBtn.active { background:#7a3ea1; }
-  #trackBtn:active { background:#f0f0f0; }
+  #roadviewBtn.active { background:#7a3ea1; }
+  #roadviewBtn:active { background:#f0f0f0; }
   #satelliteBtn {
     position:fixed; bottom:124px; right:12px; z-index:20;
     width:44px; height:44px; border-radius:50%; border:none;
@@ -82,7 +82,21 @@
   }
   #toggleLayerBtn.off { background:#ddd; opacity:0.6; }
   #toggleLayerBtn:active { background:#f0f0f0; }
+
+  #roadviewPanel {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    z-index:50; display:none; background:#000;
+  }
+  #roadviewPanel.active { display:block; }
+  #roadviewContainer { width:100%; height:100%; }
+  #roadviewCloseBtn {
+    position:absolute; top:12px; right:12px; z-index:51;
+    width:40px; height:40px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.4);
+    cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;
+  }
 </style>
+
 </head>
 <body>
 
@@ -123,9 +137,14 @@
 
 <div id="map"></div>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
-<button id="trackBtn" title="실시간 위치 추적 시작/종료">🪲</button>
+<button id="roadviewBtn" title="로드뷰 모드">🚶</button>
 <button id="satelliteBtn" title="위성지도 전환">🛰️</button>
 <button id="toggleLayerBtn" title="참나무 폴리곤 표시/숨김">🌳</button>
+
+<div id="roadviewPanel">
+  <button id="roadviewCloseBtn">✕</button>
+  <div id="roadviewContainer"></div>
+</div>
 
 <!--
   ⚠️ 아래 appkey= 뒤에 카카오 개발자센터에서 발급받은
@@ -370,8 +389,12 @@
     }
   }
 
-  // 지도 빈 곳 클릭 시 검색 마커와 말풍선 초기화
-  kakao.maps.event.addListener(map, 'click', function() {
+  // 지도 클릭 처리: 로드뷰 모드면 로드뷰 열기, 아니면 빈 곳 클릭 시 검색 마커/말풍선 초기화
+  kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+    if (roadviewModeActive) {
+      openRoadviewAt(mouseEvent.latLng);
+      return;
+    }
     if (suppressNextMapClick) { suppressNextMapClick = false; return; }
     infowindow.close();
     searchMarkers.forEach(function(m) { m.setMap(null); });
@@ -416,51 +439,34 @@
   }
   document.getElementById('locateBtn').addEventListener('click', locateMe);
 
-  var trackWatchId = null;
+  var roadviewClient = new kakao.maps.RoadviewClient();
+  var roadview = null;
+  var roadviewModeActive = false;
 
-  function toggleTracking() {
-    var btn = document.getElementById('trackBtn');
-
-    if (trackWatchId !== null) {
-      // 추적 중이면 종료
-      navigator.geolocation.clearWatch(trackWatchId);
-      trackWatchId = null;
-      btn.classList.remove('active');
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      alert('이 브라우저에서는 위치 찾기를 지원하지 않습니다.');
-      return;
-    }
-
-    btn.classList.add('active');
-    trackWatchId = navigator.geolocation.watchPosition(
-      function(pos) {
-        var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
-        map.setCenter(here);
-
-        if (myLocationMarker) myLocationMarker.setMap(null);
-        myLocationMarker = new kakao.maps.Marker({
-          map: map,
-          position: here,
-          image: new kakao.maps.MarkerImage(
-            'data:image/svg+xml;utf-8,' + encodeURIComponent(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="8" fill="%234285F4" stroke="white" stroke-width="3"/></svg>'
-            ),
-            new kakao.maps.Size(24, 24)
-          )
-        });
-      },
-      function(err) {
-        alert('위치를 가져올 수 없습니다. 브라우저의 위치 권한을 허용해주세요.');
-        btn.classList.remove('active');
-        trackWatchId = null;
-      },
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
-    );
+  function toggleRoadviewMode() {
+    var btn = document.getElementById('roadviewBtn');
+    roadviewModeActive = !roadviewModeActive;
+    btn.classList.toggle('active', roadviewModeActive);
   }
-  document.getElementById('trackBtn').addEventListener('click', toggleTracking);
+  document.getElementById('roadviewBtn').addEventListener('click', toggleRoadviewMode);
+
+  function openRoadviewAt(latlng) {
+    roadviewClient.getNearestPanoId(latlng, 50, function(panoId) {
+      if (!panoId) {
+        alert('이 위치 근처에는 로드뷰가 없습니다.');
+        return;
+      }
+      document.getElementById('roadviewPanel').classList.add('active');
+      if (!roadview) {
+        roadview = new kakao.maps.Roadview(document.getElementById('roadviewContainer'));
+      }
+      roadview.setPanoId(panoId, latlng);
+    });
+  }
+
+  document.getElementById('roadviewCloseBtn').addEventListener('click', function() {
+    document.getElementById('roadviewPanel').classList.remove('active');
+  });
 
   var isSatelliteView = false;
   function toggleSatellite() {
