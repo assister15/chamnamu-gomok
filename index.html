@@ -91,7 +91,7 @@
   #roadviewPanel.active { display:flex; }
   #roadviewContainer { width:100%; flex:1 1 auto; min-height:0; }
   #roadviewMinimap {
-    width:100%; height:140px; flex:0 0 140px; position:relative;
+    width:100%; height:100px; flex:0 0 100px; position:relative;
     border-top:2px solid #fff;
   }
   #roadviewHeadingArrow {
@@ -462,6 +462,11 @@
     var btn = document.getElementById('roadviewBtn');
     roadviewModeActive = !roadviewModeActive;
     btn.classList.toggle('active', roadviewModeActive);
+    if (roadviewModeActive) {
+      map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+    } else {
+      map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+    }
   }
   document.getElementById('roadviewBtn').addEventListener('click', toggleRoadviewMode);
 
