@@ -105,6 +105,13 @@
     background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.4);
     cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;
   }
+
+  #watermark {
+    position:fixed; bottom:2px; left:75px; z-index:15;
+    font-size:9px; color:#666; background:rgba(255,255,255,0.65);
+    padding:1px 5px; border-radius:3px; pointer-events:none;
+    white-space:nowrap;
+  }
 </style>
 
 </head>
@@ -146,6 +153,7 @@
 </div>
 
 <div id="map"></div>
+<div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
 <button id="roadviewBtn" title="로드뷰 모드">🚶</button>
 <button id="satelliteBtn" title="위성지도 전환">🛰️</button>
@@ -566,9 +574,9 @@
     return out;
   }
 
-  var tileManifest = null;   // { tileSize, tiles: { "tx_ty": {bounds, count} } }
-  var loadedTileIds = {};    // tileId -> true (이미 불러온 타일)
-  var pendingTileIds = {};   // tileId -> true (지금 불러오는 중인 타일, 중복 요청 방지)
+  var tileManifest = null;
+  var loadedTileIds = {};
+  var pendingTileIds = {};
 
   function getTileIdsForBounds(bounds, tileSize) {
     var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
@@ -603,8 +611,7 @@
         loadedTileIds[tileId] = true;
       })
       .catch(function(err) {
-        // 해당 격자에 데이터가 아예 없는 지역(바다, 도심 등)일 수 있음 — 정상
-        loadedTileIds[tileId] = true; // 재요청 방지
+        loadedTileIds[tileId] = true;
       })
       .finally(function() {
         delete pendingTileIds[tileId];
@@ -625,7 +632,6 @@
       return tileManifest.tiles[id] && !loadedTileIds[id] && !pendingTileIds[id];
     });
 
-    // 이미 불러온 타일 기준으로 우선 한번 그려서 즉시 반응하게 함
     renderVisiblePolygons();
 
     if (toFetch.length > 0) {
@@ -653,7 +659,6 @@
 
   loadForestData();
 
-  // 페이지 최초 로드 시 내 위치로 자동 이동 시도 (실패해도 조용히 기본 위치 유지)
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
@@ -673,9 +678,7 @@
           )
         });
       },
-      function(err) {
-        // 위치 권한 거부 또는 실패 시 아무 알림 없이 기본 중심 위치 유지
-      },
+      function(err) {},
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }
