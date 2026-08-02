@@ -395,13 +395,39 @@
         kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
           suppressNextMapClick = true;
           var p = f.properties;
+          var lat = mouseEvent.latLng.getLat();
+          var lng = mouseEvent.latLng.getLng();
           infowindow.setContent(
             '<div style="padding:6px;font-size:12px;">' +
             (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+            '<br>고도: 조회 중...' +
             '</div>'
           );
           infowindow.setPosition(mouseEvent.latLng);
           infowindow.open(map);
+
+          fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+              var elevText = '고도 정보 없음';
+              if (data && data.results && data.results[0] && data.results[0].elevation != null) {
+                elevText = '고도: 약 ' + Math.round(data.results[0].elevation) + 'm';
+              }
+              infowindow.setContent(
+                '<div style="padding:6px;font-size:12px;">' +
+                (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+                '<br>' + elevText +
+                '</div>'
+              );
+            })
+            .catch(function() {
+              infowindow.setContent(
+                '<div style="padding:6px;font-size:12px;">' +
+                (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+                '<br>고도 조회 실패' +
+                '</div>'
+              );
+            });
         });
       });
       drawn++;
