@@ -363,6 +363,40 @@
 
   var showPolygons = true;
 
+  function fetchElevation(lat, lng) {
+    return fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
+      .then(function(res) {
+        if (!res.ok) throw new Error('open-elevation 실패');
+        return res.json();
+      })
+      .then(function(data) {
+        if (data && data.results && data.results[0] && data.results[0].elevation != null) {
+          return data.results[0].elevation;
+        }
+        throw new Error('open-elevation 데이터 없음');
+      })
+      .catch(function() {
+        return fetch('https://api.opentopodata.org/v1/srtm90m?locations=' + lat + ',' + lng)
+          .then(function(res) {
+            if (!res.ok) throw new Error('opentopodata 실패');
+            return res.json();
+          })
+          .then(function(data) {
+            if (data && data.results && data.results[0] && data.results[0].elevation != null) {
+              return data.results[0].elevation;
+            }
+            throw new Error('opentopodata 데이터 없음');
+          });
+      });
+  }
+
+  function buildInfoContent(p, elevText) {
+    return '<div style="padding:6px;font-size:12px;">' +
+      (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+      (elevText ? '<br>' + elevText : '') +
+      '</div>';
+  }
+
   function renderVisiblePolygons() {
     clearCurrentPolygons();
     if (!showPolygons) return;
@@ -397,36 +431,16 @@
           var p = f.properties;
           var lat = mouseEvent.latLng.getLat();
           var lng = mouseEvent.latLng.getLng();
-          infowindow.setContent(
-            '<div style="padding:6px;font-size:12px;">' +
-            (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
-            '<br>고도: 조회 중...' +
-            '</div>'
-          );
+          infowindow.setContent(buildInfoContent(p, '고도: 조회 중...'));
           infowindow.setPosition(mouseEvent.latLng);
           infowindow.open(map);
 
-          fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-              var elevText = '고도 정보 없음';
-              if (data && data.results && data.results[0] && data.results[0].elevation != null) {
-                elevText = '고도: 약 ' + Math.round(data.results[0].elevation) + 'm';
-              }
-              infowindow.setContent(
-                '<div style="padding:6px;font-size:12px;">' +
-                (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
-                '<br>' + elevText +
-                '</div>'
-              );
+          fetchElevation(lat, lng)
+            .then(function(elevation) {
+              infowindow.setContent(buildInfoContent(p, '고도: 약 ' + Math.round(elevation) + 'm'));
             })
             .catch(function() {
-              infowindow.setContent(
-                '<div style="padding:6px;font-size:12px;">' +
-                (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
-                '<br>고도 조회 실패' +
-                '</div>'
-              );
+              infowindow.setContent(buildInfoContent(p, '고도 조회 실패 (다시 눌러보세요)'));
             });
         });
       });
