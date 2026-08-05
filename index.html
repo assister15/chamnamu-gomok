@@ -97,7 +97,7 @@
   #roadviewHeadingArrow {
     position:absolute; top:50%; left:50%; z-index:5; pointer-events:none;
     transform:translate(-50%,-50%) rotate(0deg);
-    font-size:26px; color:#e53935; text-shadow:0 0 3px #fff, 0 0 3px #fff;
+    width:30px; height:30px;
   }
   #roadviewCloseBtn {
     position:absolute; top:12px; right:12px; z-index:51;
@@ -163,13 +163,20 @@
   <button id="roadviewCloseBtn">✕</button>
   <div id="roadviewContainer"></div>
   <div id="roadviewMinimap">
-    <div id="roadviewHeadingArrow">▲</div>
+    <div id="roadviewHeadingArrow"><svg width="30" height="30" viewBox="-15 -15 30 30"><path d="M0,-13 L7,10 L0,4 L-7,10 Z" fill="#e53935" stroke="#fff" stroke-width="1.5"/></svg></div>
   </div>
 </div>
 
 <!--
   ⚠️ 아래 appkey= 뒤에 카카오 개발자센터에서 발급받은
   "JavaScript 키"를 넣어주세요. (REST API 키 아님, JavaScript 키!)
+
+  발급 방법:
+  1) https://developers.kakao.com 접속 → 로그인 → [내 애플리케이션] → 애플리케이션 추가
+  2) 앱 만든 후 [앱 키] 탭에서 "JavaScript 키" 복사
+  3) [플랫폼] 탭 → Web 플랫폼 등록 → 이 파일을 실행할 주소를 등록
+     (예: 로컬에서 테스트하면 http://localhost:5500 같은 주소, 실제 배포하면 그 도메인)
+     * 도메인 등록을 안 하면 지도가 아예 안 뜹니다. 꼭 해주세요.
 -->
 <script type="text/javascript"
   src="//dapi.kakao.com/v2/maps/sdk.js?appkey=b6be609f48c0c84193b5809a6b4fe72e&libraries=services"></script>
@@ -229,6 +236,7 @@
       if (doneCount >= TOTAL_CALLS) renderCombinedResults(combined);
     }
 
+    // 1) 상호명/장소명 검색 (예: 지성고깃집, 원삼면 펜션)
     ps.keywordSearch(keyword, function(data, status) {
       if (status === kakao.maps.services.Status.OK) {
         data.forEach(function(place) {
@@ -243,6 +251,7 @@
       onOneDone();
     });
 
+    // 2) 주소 검색 (예: 경기 용인시 처인구 ○○로 123)
     geocoder.addressSearch(keyword, function(data, status) {
       if (status === kakao.maps.services.Status.OK) {
         data.forEach(function(addr) {
@@ -369,6 +378,7 @@
         throw new Error('open-elevation 데이터 없음');
       })
       .catch(function() {
+        // 1차 서비스 실패 시 다른 무료 고도 API로 재시도
         return fetch('https://api.opentopodata.org/v1/srtm90m?locations=' + lat + ',' + lng)
           .then(function(res) {
             if (!res.ok) throw new Error('opentopodata 실패');
@@ -452,6 +462,7 @@
     }
   }
 
+  // 지도 클릭 처리: 로드뷰 모드면 로드뷰 열기, 아니면 빈 곳 클릭 시 검색 마커/말풍선 초기화
   kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
     if (roadviewModeActive) {
       openRoadviewAt(mouseEvent.latLng);
@@ -549,6 +560,7 @@
       }
       roadview.setPanoId(panoId, latlng);
 
+      // 지도 컨테이너가 방금 화면에 나타났으므로 크기 재계산
       setTimeout(function() {
         roadview.relayout();
         roadviewMinimap.relayout();
@@ -614,9 +626,9 @@
     return out;
   }
 
-  var tileManifest = null;
-  var loadedTileIds = {};
-  var pendingTileIds = {};
+  var tileManifest = null;   // { tileSize, tiles: { "tx_ty": {bounds, count} } }
+  var loadedTileIds = {};    // tileId -> true (이미 불러온 타일)
+  var pendingTileIds = {};   // tileId -> true (지금 불러오는 중인 타일, 중복 요청 방지)
 
   function getTileIdsForBounds(bounds, tileSize) {
     var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
@@ -651,7 +663,8 @@
         loadedTileIds[tileId] = true;
       })
       .catch(function(err) {
-        loadedTileIds[tileId] = true;
+        // 해당 격자에 데이터가 아예 없는 지역(바다, 도심 등)일 수 있음 — 정상
+        loadedTileIds[tileId] = true; // 재요청 방지
       })
       .finally(function() {
         delete pendingTileIds[tileId];
@@ -672,6 +685,7 @@
       return tileManifest.tiles[id] && !loadedTileIds[id] && !pendingTileIds[id];
     });
 
+    // 이미 불러온 타일 기준으로 우선 한번 그려서 즉시 반응하게 함
     renderVisiblePolygons();
 
     if (toFetch.length > 0) {
@@ -699,6 +713,7 @@
 
   loadForestData();
 
+  // 페이지 최초 로드 시 내 위치로 자동 이동 시도 (실패해도 조용히 기본 위치 유지)
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
@@ -718,7 +733,9 @@
           )
         });
       },
-      function(err) {},
+      function(err) {
+        // 위치 권한 거부 또는 실패 시 아무 알림 없이 기본 중심 위치 유지
+      },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }
