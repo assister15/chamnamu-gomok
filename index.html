@@ -236,7 +236,6 @@
       if (doneCount >= TOTAL_CALLS) renderCombinedResults(combined);
     }
 
-    // 1) 상호명/장소명 검색 (예: 지성고깃집, 원삼면 펜션)
     ps.keywordSearch(keyword, function(data, status) {
       if (status === kakao.maps.services.Status.OK) {
         data.forEach(function(place) {
@@ -251,7 +250,6 @@
       onOneDone();
     });
 
-    // 2) 주소 검색 (예: 경기 용인시 처인구 ○○로 123)
     geocoder.addressSearch(keyword, function(data, status) {
       if (status === kakao.maps.services.Status.OK) {
         data.forEach(function(addr) {
@@ -378,7 +376,10 @@
         throw new Error('open-elevation 데이터 없음');
       })
       .catch(function() {
+<<<<<<< HEAD
         // 1차 서비스 실패 시 다른 무료 고도 API로 재시도
+=======
+>>>>>>> e4cccea8e76c477040fb4bde02456c0948eaca47
         return fetch('https://api.opentopodata.org/v1/srtm90m?locations=' + lat + ',' + lng)
           .then(function(res) {
             if (!res.ok) throw new Error('opentopodata 실패');
@@ -393,6 +394,7 @@
       });
   }
 
+<<<<<<< HEAD
   function buildInfoContent(p, elevText, showRetry) {
     return '<div style="padding:6px;font-size:12px;">' +
       (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
@@ -419,6 +421,15 @@
       });
   }
 
+=======
+  function buildInfoContent(p, elevText) {
+    return '<div style="padding:6px;font-size:12px;">' +
+      (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+      (elevText ? '<br>' + elevText : '') +
+      '</div>';
+  }
+
+>>>>>>> e4cccea8e76c477040fb4bde02456c0948eaca47
   function renderVisiblePolygons() {
     clearCurrentPolygons();
     if (!showPolygons) return;
@@ -453,16 +464,33 @@
           var p = f.properties;
           var lat = mouseEvent.latLng.getLat();
           var lng = mouseEvent.latLng.getLng();
+<<<<<<< HEAD
           infowindow.setPosition(mouseEvent.latLng);
           infowindow.open(map);
           requestElevation(p, lat, lng);
+=======
+          infowindow.setContent(buildInfoContent(p, '고도: 조회 중...'));
+          infowindow.setPosition(mouseEvent.latLng);
+          infowindow.open(map);
+
+          fetchElevation(lat, lng)
+            .then(function(elevation) {
+              infowindow.setContent(buildInfoContent(p, '고도: 약 ' + Math.round(elevation) + 'm'));
+            })
+            .catch(function() {
+              infowindow.setContent(buildInfoContent(p, '고도 조회 실패 (다시 눌러보세요)'));
+            });
+>>>>>>> e4cccea8e76c477040fb4bde02456c0948eaca47
         });
       });
       drawn++;
     }
   }
 
+<<<<<<< HEAD
   // 지도 클릭 처리: 로드뷰 모드면 로드뷰 열기, 아니면 빈 곳 클릭 시 검색 마커/말풍선 초기화
+=======
+>>>>>>> e4cccea8e76c477040fb4bde02456c0948eaca47
   kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
     if (roadviewModeActive) {
       openRoadviewAt(mouseEvent.latLng);
@@ -560,7 +588,10 @@
       }
       roadview.setPanoId(panoId, latlng);
 
+<<<<<<< HEAD
       // 지도 컨테이너가 방금 화면에 나타났으므로 크기 재계산
+=======
+>>>>>>> e4cccea8e76c477040fb4bde02456c0948eaca47
       setTimeout(function() {
         roadview.relayout();
         roadviewMinimap.relayout();
@@ -626,9 +657,9 @@
     return out;
   }
 
-  var tileManifest = null;   // { tileSize, tiles: { "tx_ty": {bounds, count} } }
-  var loadedTileIds = {};    // tileId -> true (이미 불러온 타일)
-  var pendingTileIds = {};   // tileId -> true (지금 불러오는 중인 타일, 중복 요청 방지)
+  var tileManifest = null;
+  var loadedTileIds = {};
+  var pendingTileIds = {};
 
   function getTileIdsForBounds(bounds, tileSize) {
     var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
@@ -663,8 +694,7 @@
         loadedTileIds[tileId] = true;
       })
       .catch(function(err) {
-        // 해당 격자에 데이터가 아예 없는 지역(바다, 도심 등)일 수 있음 — 정상
-        loadedTileIds[tileId] = true; // 재요청 방지
+        loadedTileIds[tileId] = true;
       })
       .finally(function() {
         delete pendingTileIds[tileId];
@@ -685,7 +715,6 @@
       return tileManifest.tiles[id] && !loadedTileIds[id] && !pendingTileIds[id];
     });
 
-    // 이미 불러온 타일 기준으로 우선 한번 그려서 즉시 반응하게 함
     renderVisiblePolygons();
 
     if (toFetch.length > 0) {
@@ -713,7 +742,6 @@
 
   loadForestData();
 
-  // 페이지 최초 로드 시 내 위치로 자동 이동 시도 (실패해도 조용히 기본 위치 유지)
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
@@ -733,9 +761,7 @@
           )
         });
       },
-      function(err) {
-        // 위치 권한 거부 또는 실패 시 아무 알림 없이 기본 중심 위치 유지
-      },
+      function(err) {},
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }
