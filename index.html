@@ -58,7 +58,62 @@
     cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
   }
   #locateBtn:active { background:#f0f0f0; }
+  #roadviewBtn {
+    position:fixed; bottom:72px; right:12px; z-index:20;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
+  }
+  #roadviewBtn.active { background:#7a3ea1; }
+  #roadviewBtn:active { background:#f0f0f0; }
+  #satelliteBtn {
+    position:fixed; bottom:124px; right:12px; z-index:20;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
+  }
+  #satelliteBtn.active { background:#7a3ea1; }
+  #satelliteBtn:active { background:#f0f0f0; }
+  #toggleLayerBtn {
+    position:fixed; bottom:176px; right:12px; z-index:20;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
+  }
+  #toggleLayerBtn.off { background:#ddd; opacity:0.6; }
+  #toggleLayerBtn:active { background:#f0f0f0; }
+
+  #roadviewPanel {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    z-index:50; display:none; background:#000;
+    flex-direction:column;
+  }
+  #roadviewPanel.active { display:flex; }
+  #roadviewContainer { width:100%; flex:1 1 auto; min-height:0; }
+  #roadviewMinimap {
+    width:100%; height:100px; flex:0 0 100px; position:relative;
+    border-top:2px solid #fff;
+  }
+  #roadviewHeadingArrow {
+    position:absolute; top:50%; left:50%; z-index:5; pointer-events:none;
+    transform:translate(-50%,-50%) rotate(0deg);
+    font-size:26px; color:#e53935; text-shadow:0 0 3px #fff, 0 0 3px #fff;
+  }
+  #roadviewCloseBtn {
+    position:absolute; top:12px; right:12px; z-index:51;
+    width:40px; height:40px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.4);
+    cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;
+  }
+
+  #watermark {
+    position:fixed; bottom:4px; right:70px; z-index:15;
+    font-size:9px; color:#666; background:rgba(255,255,255,0.65);
+    padding:1px 5px; border-radius:3px; pointer-events:none;
+    white-space:nowrap;
+  }
 </style>
+
 </head>
 <body>
 
@@ -98,7 +153,19 @@
 </div>
 
 <div id="map"></div>
+<div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
+<button id="roadviewBtn" title="로드뷰 모드">🚶</button>
+<button id="satelliteBtn" title="위성지도 전환">🛰️</button>
+<button id="toggleLayerBtn" title="참나무 폴리곤 표시/숨김">🌳</button>
+
+<div id="roadviewPanel">
+  <button id="roadviewCloseBtn">✕</button>
+  <div id="roadviewContainer"></div>
+  <div id="roadviewMinimap">
+    <div id="roadviewHeadingArrow">▲</div>
+  </div>
+</div>
 
 <!--
   ⚠️ 아래 appkey= 뒤에 카카오 개발자센터에서 발급받은
@@ -289,8 +356,6 @@
               bbox.maxLat < sw.getLat() || bbox.minLat > ne.getLat());
   }
 
-  // ── 폴리곤 전용 캔버스 렌더링 ──
-  // 카카오맵의 기본 Polygon 오버레이는 여러 조각을 하나로 묶어도
   var currentPolygons = [];
 
   function clearCurrentPolygons() {
@@ -298,8 +363,65 @@
     currentPolygons = [];
   }
 
+  var showPolygons = true;
+
+  function fetchElevation(lat, lng) {
+    return fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
+      .then(function(res) {
+        if (!res.ok) throw new Error('open-elevation 실패');
+        return res.json();
+      })
+      .then(function(data) {
+        if (data && data.results && data.results[0] && data.results[0].elevation != null) {
+          return data.results[0].elevation;
+        }
+        throw new Error('open-elevation 데이터 없음');
+      })
+      .catch(function() {
+        // 1차 서비스 실패 시 다른 무료 고도 API로 재시도
+        return fetch('https://api.opentopodata.org/v1/srtm90m?locations=' + lat + ',' + lng)
+          .then(function(res) {
+            if (!res.ok) throw new Error('opentopodata 실패');
+            return res.json();
+          })
+          .then(function(data) {
+            if (data && data.results && data.results[0] && data.results[0].elevation != null) {
+              return data.results[0].elevation;
+            }
+            throw new Error('opentopodata 데이터 없음');
+          });
+      });
+  }
+
+  function buildInfoContent(p, elevText, showRetry) {
+    return '<div style="padding:6px;font-size:12px;">' +
+      (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+      (elevText ? '<br>' + elevText : '') +
+      (showRetry ? ' <a href="#" id="elevRetryLink" style="color:#4b1575;text-decoration:underline;">다시 시도</a>' : '') +
+      '</div>';
+  }
+
+  function requestElevation(p, lat, lng) {
+    infowindow.setContent(buildInfoContent(p, '고도: 조회 중...', false));
+    fetchElevation(lat, lng)
+      .then(function(elevation) {
+        infowindow.setContent(buildInfoContent(p, '고도: 약 ' + Math.round(elevation) + 'm', false));
+      })
+      .catch(function() {
+        infowindow.setContent(buildInfoContent(p, '고도 조회 실패', true));
+        var retryLink = document.getElementById('elevRetryLink');
+        if (retryLink) {
+          retryLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            requestElevation(p, lat, lng);
+          });
+        }
+      });
+  }
+
   function renderVisiblePolygons() {
     clearCurrentPolygons();
+    if (!showPolygons) return;
 
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) return;
     if (allFeatures.length === 0) return;
@@ -329,21 +451,23 @@
         kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
           suppressNextMapClick = true;
           var p = f.properties;
-          infowindow.setContent(
-            '<div style="padding:6px;font-size:12px;">' +
-            (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
-            '</div>'
-          );
+          var lat = mouseEvent.latLng.getLat();
+          var lng = mouseEvent.latLng.getLng();
           infowindow.setPosition(mouseEvent.latLng);
           infowindow.open(map);
+          requestElevation(p, lat, lng);
         });
       });
       drawn++;
     }
   }
 
-  // 지도 빈 곳 클릭 시 검색 마커와 말풍선 초기화
-  kakao.maps.event.addListener(map, 'click', function() {
+  // 지도 클릭 처리: 로드뷰 모드면 로드뷰 열기, 아니면 빈 곳 클릭 시 검색 마커/말풍선 초기화
+  kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+    if (roadviewModeActive) {
+      openRoadviewAt(mouseEvent.latLng);
+      return;
+    }
     if (suppressNextMapClick) { suppressNextMapClick = false; return; }
     infowindow.close();
     searchMarkers.forEach(function(m) { m.setMap(null); });
@@ -387,6 +511,89 @@
     );
   }
   document.getElementById('locateBtn').addEventListener('click', locateMe);
+
+  var roadviewClient = new kakao.maps.RoadviewClient();
+  var roadview = null;
+  var roadviewModeActive = false;
+  var roadviewMinimap = null;
+  var roadviewMinimapMarker = null;
+
+  function toggleRoadviewMode() {
+    var btn = document.getElementById('roadviewBtn');
+    roadviewModeActive = !roadviewModeActive;
+    btn.classList.toggle('active', roadviewModeActive);
+    if (roadviewModeActive) {
+      map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+    } else {
+      map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+    }
+  }
+  document.getElementById('roadviewBtn').addEventListener('click', toggleRoadviewMode);
+
+  function openRoadviewAt(latlng) {
+    roadviewClient.getNearestPanoId(latlng, 50, function(panoId) {
+      if (!panoId) {
+        alert('이 위치 근처에는 로드뷰가 없습니다.');
+        return;
+      }
+      document.getElementById('roadviewPanel').classList.add('active');
+
+      var firstTime = !roadview;
+      if (firstTime) {
+        roadview = new kakao.maps.Roadview(document.getElementById('roadviewContainer'));
+        roadviewMinimap = new kakao.maps.Map(document.getElementById('roadviewMinimap'), {
+          center: latlng,
+          level: 3
+        });
+        roadviewMinimapMarker = new kakao.maps.Marker({ map: roadviewMinimap, position: latlng });
+
+        kakao.maps.event.addListener(roadview, 'position_changed', function() {
+          var pos = roadview.getPosition();
+          roadviewMinimap.setCenter(pos);
+          roadviewMinimapMarker.setPosition(pos);
+        });
+        kakao.maps.event.addListener(roadview, 'viewpoint_changed', function() {
+          var vp = roadview.getViewpoint();
+          var arrow = document.getElementById('roadviewHeadingArrow');
+          arrow.style.transform = 'translate(-50%,-50%) rotate(' + vp.pan + 'deg)';
+        });
+      }
+      roadview.setPanoId(panoId, latlng);
+
+      // 지도 컨테이너가 방금 화면에 나타났으므로 크기 재계산
+      setTimeout(function() {
+        roadview.relayout();
+        roadviewMinimap.relayout();
+        roadviewMinimap.setCenter(latlng);
+      }, 0);
+    });
+  }
+
+  document.getElementById('roadviewCloseBtn').addEventListener('click', function() {
+    document.getElementById('roadviewPanel').classList.remove('active');
+  });
+
+  var isSatelliteView = false;
+  function toggleSatellite() {
+    var btn = document.getElementById('satelliteBtn');
+    isSatelliteView = !isSatelliteView;
+    if (isSatelliteView) {
+      map.setMapTypeId(kakao.maps.MapTypeId.HYBRID);
+      btn.classList.add('active');
+    } else {
+      map.setMapTypeId(kakao.maps.MapTypeId.ROADMAP);
+      btn.classList.remove('active');
+    }
+  }
+  document.getElementById('satelliteBtn').addEventListener('click', toggleSatellite);
+
+  function togglePolygonLayer() {
+    var btn = document.getElementById('toggleLayerBtn');
+    showPolygons = !showPolygons;
+    btn.classList.toggle('off', !showPolygons);
+    renderVisiblePolygons();
+  }
+  document.getElementById('toggleLayerBtn').addEventListener('click', togglePolygonLayer);
 
   function transformFeatures(features) {
     var out = [];
