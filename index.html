@@ -309,9 +309,29 @@
     '1': '#f3ebe3'
   };
 
+  // 참나무류 외 활엽수(기타활엽수, 오리나무)는 시인성 좋은 주황-노랑 계열로 구분
+  var OTHER_BROADLEAF_COLORS = {
+    '9': '#63440c',
+    '8': '#875b11',
+    '7': '#aa7415',
+    '6': '#ce8b19',
+    '5': '#e5a32f',
+    '4': '#ecba63',
+    '3': '#f2cf92',
+    '2': '#f6dfb7',
+    '1': '#fbefdb'
+  };
+
   function colorByGrade(props) {
     var species = String(props.KOFTR_NM || '');
-    var palette = species.includes('침활혼효림') ? MIXED_FOREST_COLORS : GRADE_COLORS;
+    var palette;
+    if (species.includes('침활혼효림')) {
+      palette = MIXED_FOREST_COLORS;
+    } else if (species.includes('기타활엽수') || species.includes('오리나무')) {
+      palette = OTHER_BROADLEAF_COLORS;
+    } else {
+      palette = GRADE_COLORS;
+    }
     var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
     for (var g = 9; g >= 1; g--) {
       if (grade.includes(String(g))) return palette[String(g)];
