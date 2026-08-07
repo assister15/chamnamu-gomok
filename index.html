@@ -33,23 +33,6 @@
   }
   #resultList div:hover { background:#f5f5f5; }
 
-  #legend {
-    position:absolute; bottom:20px; left:12px; z-index:10;
-    background:#fff; padding:8px 10px; border-radius:8px;
-    box-shadow:0 2px 8px rgba(0,0,0,0.25); font-size:12px;
-  }
-  #legend div.row { margin-bottom:4px; }
-  #legend span.swatch { display:inline-block; width:18px; height:18px; margin-right:6px; vertical-align:middle; border:1px solid rgba(0,0,0,0.35); border-radius:2px; }
-  #legendToggle {
-    display:block; width:100%; text-align:right; background:none;
-    border:none; cursor:pointer; font-size:12px; color:#555; padding:2px 0; margin-bottom:4px;
-  }
-  #legendStrip { display:none; gap:3px; }
-  #legendStrip span { display:inline-block; width:14px; height:14px; border:1px solid rgba(0,0,0,0.3); border-radius:2px; }
-  #legend.collapsed { padding:6px 8px; }
-  #legend.collapsed #legendBody { display:none; }
-  #legend.collapsed #legendToggle { margin-bottom:0; text-align:center; }
-  #legend.collapsed #legendStrip { display:flex; }
 
   #locateBtn {
     position:fixed; bottom:20px; right:12px; z-index:20;
@@ -126,31 +109,7 @@
   </div>
 </div>
 
-<div id="legend">
-  <button id="legendToggle" onclick="toggleLegend()">▼ 접기</button>
-  <div id="legendBody">
-    <div class="row"><span class="swatch" style="background:#2c0a43;"></span>9영급</div>
-    <div class="row"><span class="swatch" style="background:#4b1575;"></span>8영급</div>
-    <div class="row"><span class="swatch" style="background:#6823a4;"></span>7영급</div>
-    <div class="row"><span class="swatch" style="background:#8237cd;"></span>6영급</div>
-    <div class="row"><span class="swatch" style="background:#a071d6;"></span>5영급</div>
-    <div class="row"><span class="swatch" style="background:#cfc2e0;"></span>4영급</div>
-    <div class="row"><span class="swatch" style="background:#dcd4e7;"></span>3영급</div>
-    <div class="row"><span class="swatch" style="background:#e7e2ee;"></span>2영급</div>
-    <div class="row"><span class="swatch" style="background:#f2eff5;"></span>1영급</div>
-  </div>
-  <div id="legendStrip">
-    <span style="background:#2c0a43;" title="9영급"></span>
-    <span style="background:#4b1575;" title="8영급"></span>
-    <span style="background:#6823a4;" title="7영급"></span>
-    <span style="background:#8237cd;" title="6영급"></span>
-    <span style="background:#a071d6;" title="5영급"></span>
-    <span style="background:#cfc2e0;" title="4영급"></span>
-    <span style="background:#dcd4e7;" title="3영급"></span>
-    <span style="background:#e7e2ee;" title="2영급"></span>
-    <span style="background:#f2eff5;" title="1영급"></span>
-  </div>
-</div>
+
 
 <div id="map"></div>
 <div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
@@ -203,13 +162,6 @@
     var btn = document.getElementById('panelToggle');
     panel.classList.toggle('collapsed');
     btn.textContent = panel.classList.contains('collapsed') ? '▼ 검색' : '▲ 접기';
-  }
-
-  function toggleLegend() {
-    var legend = document.getElementById('legend');
-    var btn = document.getElementById('legendToggle');
-    legend.classList.toggle('collapsed');
-    btn.textContent = legend.classList.contains('collapsed') ? '▲ 범례' : '▼ 접기';
   }
 
   var mapContainer = document.getElementById('map');
@@ -327,12 +279,27 @@
     '1': '#f2eff5'
   };
 
+  // 침활혼효림은 다른 수종과 구분되게 연한 갈색 계열로 (지도 위에서 튀지 않도록 채도/명도 제한)
+  var MIXED_FOREST_COLORS = {
+    '9': '#825935',
+    '8': '#9d6c40',
+    '7': '#b77f4e',
+    '6': '#c3946b',
+    '5': '#cda785',
+    '4': '#d7b89c',
+    '3': '#e0c9b4',
+    '2': '#eadacb',
+    '1': '#f3ebe3'
+  };
+
   function colorByGrade(props) {
+    var species = String(props.KOFTR_NM || '');
+    var palette = species.includes('침활혼효림') ? MIXED_FOREST_COLORS : GRADE_COLORS;
     var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
     for (var g = 9; g >= 1; g--) {
-      if (grade.includes(String(g))) return GRADE_COLORS[String(g)];
+      if (grade.includes(String(g))) return palette[String(g)];
     }
-    return '#f2eff5';
+    return palette['1'];
   }
 
   function getBbox(coordsList) {
