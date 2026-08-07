@@ -165,11 +165,28 @@
   }
 
   var mapContainer = document.getElementById('map');
-  var mapOption = {
-    center: new kakao.maps.LatLng(37.130, 127.330),
-    level: 6
-  };
+  var savedView = null;
+  try {
+    var savedViewRaw = sessionStorage.getItem('lastMapView');
+    if (savedViewRaw) savedView = JSON.parse(savedViewRaw);
+  } catch (e) {}
+
+  var mapOption = savedView
+    ? { center: new kakao.maps.LatLng(savedView.lat, savedView.lng), level: savedView.level }
+    : { center: new kakao.maps.LatLng(37.130, 127.330), level: 6 };
   var map = new kakao.maps.Map(mapContainer, mapOption);
+
+  kakao.maps.event.addListener(map, 'idle', function() {
+    try {
+      var center = map.getCenter();
+      sessionStorage.setItem('lastMapView', JSON.stringify({
+        lat: center.getLat(),
+        lng: center.getLng(),
+        level: map.getLevel()
+      }));
+    } catch (e) {}
+  });
+
   var ps = new kakao.maps.services.Places();
   var geocoder = new kakao.maps.services.Geocoder();
   var searchMarkers = [];
@@ -680,8 +697,8 @@
 
   loadForestData();
 
-  // 페이지 최초 로드 시 내 위치로 자동 이동 시도 (실패해도 조용히 기본 위치 유지)
-  if (navigator.geolocation) {
+  // 페이지 최초 로드 시 내 위치로 자동 이동 시도 (단, 이전에 보던 위치가 저장돼 있으면 그 위치를 유지하고 건너뜀)
+  if (!savedView && navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
         var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
