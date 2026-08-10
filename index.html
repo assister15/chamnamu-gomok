@@ -736,6 +736,36 @@
     try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
   }
 
+  function getShortAddress(lat, lng, callback) {
+    geocoder.coord2Address(lng, lat, function(result, status) {
+      if (status !== kakao.maps.services.Status.OK || !result || !result[0]) {
+        callback(null);
+        return;
+      }
+      var r = result[0];
+      if (r.road_address && r.road_address.road_name) {
+        var ra = r.road_address;
+        var no = ra.main_building_no || '';
+        if (ra.sub_building_no && ra.sub_building_no !== '0') {
+          no += '-' + ra.sub_building_no;
+        }
+        callback((ra.road_name + ' ' + no).trim());
+        return;
+      }
+      if (r.address) {
+        var a = r.address;
+        var dong = a.region_3depth_name || '';
+        var jibun = a.main_address_no || '';
+        if (a.sub_address_no && a.sub_address_no !== '0') {
+          jibun += '-' + a.sub_address_no;
+        }
+        callback((dong + ' ' + jibun).trim());
+        return;
+      }
+      callback(null);
+    });
+  }
+
   function renderSavedPlaces() {
     savedPlaceMarkers.forEach(function(m) { m.setMap(null); });
     savedPlaceMarkers = [];
@@ -754,6 +784,7 @@
         suppressNextMapClick = true;
         infowindow.setContent(
           '<div style="padding:6px;font-size:12px;">' + place.name +
+          '<br>주소: 조회 중...' +
           ' <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
         );
         infowindow.setPosition(marker.getPosition());
@@ -770,6 +801,23 @@
             });
           }
         }, 0);
+        getShortAddress(place.lat, place.lng, function(addr) {
+          infowindow.setContent(
+            '<div style="padding:6px;font-size:12px;">' + place.name +
+            '<br>주소: ' + (addr || '정보 없음') +
+            ' <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
+          );
+          var del2 = document.getElementById('deleteSavedPlaceLink');
+          if (del2) {
+            del2.addEventListener('click', function(e) {
+              e.preventDefault();
+              savedPlaces.splice(idx, 1);
+              persistSavedPlaces();
+              renderSavedPlaces();
+              infowindow.close();
+            });
+          }
+        });
       });
       savedPlaceMarkers.push(marker);
     });
