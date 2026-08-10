@@ -69,18 +69,18 @@
   #roadviewPanel {
     position:fixed; top:0; left:0; width:100%; height:100%;
     z-index:50; display:none; background:#000;
-    flex-direction:column;
   }
-  #roadviewPanel.active { display:flex; }
-  #roadviewContainer { width:100%; flex:1 1 auto; min-height:0; }
+  #roadviewPanel.active { display:block; }
+  #roadviewContainer { width:100%; height:100%; }
   #roadviewMinimap {
-    width:100%; height:100px; flex:0 0 100px; position:relative;
-    border-top:2px solid #fff;
+    position:absolute; right:12px; bottom:12px; z-index:5;
+    width:120px; height:120px; border-radius:8px; overflow:hidden;
+    border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.5);
   }
   #roadviewHeadingArrow {
     position:absolute; top:50%; left:50%; z-index:5; pointer-events:none;
     transform:translate(-50%,-50%) rotate(0deg);
-    width:30px; height:30px;
+    width:26px; height:26px;
   }
   #roadviewCloseBtn {
     position:absolute; top:12px; right:12px; z-index:51;
@@ -100,8 +100,8 @@
 </head>
 <body>
 
-<div id="panel">
-  <button id="panelToggle" onclick="togglePanel()">▲ 접기</button>
+<div id="panel" class="collapsed">
+  <button id="panelToggle" onclick="togglePanel()">▼ 검색</button>
   <div id="panelBody">
     <input type="text" id="keyword" placeholder="예: 원삼면 펜션, 두창저수지 등">
     <button onclick="searchPlaces()">검색</button>
@@ -577,7 +577,7 @@
     document.getElementById('roadviewPanel').classList.remove('active');
   });
 
-  var isSatelliteView = false;
+  var isSatelliteView = true;
   function toggleSatellite() {
     var btn = document.getElementById('satelliteBtn');
     isSatelliteView = !isSatelliteView;
@@ -590,6 +590,9 @@
     }
   }
   document.getElementById('satelliteBtn').addEventListener('click', toggleSatellite);
+  // 처음 접속 시 기본값을 위성지도로 표시
+  map.setMapTypeId(kakao.maps.MapTypeId.HYBRID);
+  document.getElementById('satelliteBtn').classList.add('active');
 
   function togglePolygonLayer() {
     var btn = document.getElementById('toggleLayerBtn');
@@ -716,6 +719,124 @@
   }
 
   loadForestData();
+
+  // ── 내 장소 저장 (길게 누르기) — 이 기기(브라우저)에만 저장되고 다른 사용자와 공유되지 않음 ──
+  var savedPlaces = [];
+  var savedPlaceMarkers = [];
+
+  function loadSavedPlaces() {
+    try {
+      var raw = localStorage.getItem('savedPlaces');
+      savedPlaces = raw ? JSON.parse(raw) : [];
+    } catch (e) { savedPlaces = []; }
+    renderSavedPlaces();
+  }
+
+  function persistSavedPlaces() {
+    try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
+  }
+
+  function renderSavedPlaces() {
+    savedPlaceMarkers.forEach(function(m) { m.setMap(null); });
+    savedPlaceMarkers = [];
+    savedPlaces.forEach(function(place, idx) {
+      var marker = new kakao.maps.Marker({
+        map: map,
+        position: new kakao.maps.LatLng(place.lat, place.lng),
+        image: new kakao.maps.MarkerImage(
+          'data:image/svg+xml;utf-8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="34"><path d="M15 2 L18.5 12 L29 12 L20.5 18.5 L23.5 29 L15 22.5 L6.5 29 L9.5 18.5 L1 12 L11.5 12 Z" fill="%23ffb300" stroke="%23a05a00" stroke-width="1.2"/></svg>'
+          ),
+          new kakao.maps.Size(30, 34)
+        )
+      });
+      kakao.maps.event.addListener(marker, 'click', function() {
+        suppressNextMapClick = true;
+        infowindow.setContent(
+          '<div style="padding:6px;font-size:12px;">' + place.name +
+          ' <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
+        );
+        infowindow.setPosition(marker.getPosition());
+        infowindow.open(map);
+        setTimeout(function() {
+          var del = document.getElementById('deleteSavedPlaceLink');
+          if (del) {
+            del.addEventListener('click', function(e) {
+              e.preventDefault();
+              savedPlaces.splice(idx, 1);
+              persistSavedPlaces();
+              renderSavedPlaces();
+              infowindow.close();
+            });
+          }
+        }, 0);
+      });
+      savedPlaceMarkers.push(marker);
+    });
+  }
+
+  function getLatLngFromClientXY(clientX, clientY) {
+    var rect = mapContainer.getBoundingClientRect();
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+    var proj = map.getProjection();
+    return proj.coordsFromContainerPoint(new kakao.maps.Point(x, y));
+  }
+
+  var longPressTimer = null;
+  var longPressStartPoint = null;
+  var LONG_PRESS_MS = 600;
+  var LONG_PRESS_MOVE_TOLERANCE = 12;
+
+  function handlePressStart(clientX, clientY) {
+    longPressStartPoint = { x: clientX, y: clientY };
+    longPressTimer = setTimeout(function() {
+      longPressStartPoint = null;
+      var latlng = getLatLngFromClientXY(clientX, clientY);
+      var name = prompt('이 위치를 내 장소로 저장합니다.\n이름을 입력하세요 (이 기기에만 저장되고 다른 사용자에게는 공유되지 않습니다)', '내 장소');
+      if (name) {
+        savedPlaces.push({ lat: latlng.getLat(), lng: latlng.getLng(), name: name });
+        persistSavedPlaces();
+        renderSavedPlaces();
+      }
+    }, LONG_PRESS_MS);
+  }
+  function handlePressMove(clientX, clientY) {
+    if (!longPressStartPoint) return;
+    var dx = clientX - longPressStartPoint.x;
+    var dy = clientY - longPressStartPoint.y;
+    if (Math.sqrt(dx * dx + dy * dy) > LONG_PRESS_MOVE_TOLERANCE) {
+      clearTimeout(longPressTimer);
+      longPressStartPoint = null;
+    }
+  }
+  function handlePressEnd() {
+    clearTimeout(longPressTimer);
+    longPressStartPoint = null;
+  }
+
+  mapContainer.addEventListener('touchstart', function(e) {
+    if (e.touches.length !== 1) return;
+    handlePressStart(e.touches[0].clientX, e.touches[0].clientY);
+  });
+  mapContainer.addEventListener('touchmove', function(e) {
+    if (e.touches.length !== 1) return;
+    handlePressMove(e.touches[0].clientX, e.touches[0].clientY);
+  });
+  mapContainer.addEventListener('touchend', handlePressEnd);
+  mapContainer.addEventListener('touchcancel', handlePressEnd);
+
+  // PC(마우스)에서도 테스트할 수 있도록 동일하게 지원
+  mapContainer.addEventListener('mousedown', function(e) {
+    handlePressStart(e.clientX, e.clientY);
+  });
+  mapContainer.addEventListener('mousemove', function(e) {
+    handlePressMove(e.clientX, e.clientY);
+  });
+  mapContainer.addEventListener('mouseup', handlePressEnd);
+  mapContainer.addEventListener('mouseleave', handlePressEnd);
+
+  loadSavedPlaces();
 
   // 페이지 최초 로드 시 내 위치로 자동 이동 시도 (단, 이전에 보던 위치가 저장돼 있으면 그 위치를 유지하고 건너뜀)
   if (!savedView && navigator.geolocation) {
