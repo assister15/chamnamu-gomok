@@ -33,6 +33,21 @@
   }
   #resultList div:hover { background:#f5f5f5; }
 
+  #recentSearchList {
+    margin-top:4px; border:1px solid #eee; border-radius:4px;
+    max-height:180px; overflow-y:auto;
+  }
+  #recentSearchList .recentHeader {
+    font-size:11px; color:#888; padding:4px 8px 2px;
+  }
+  #recentSearchList .recentItem {
+    padding:6px 8px; font-size:13px; cursor:pointer; border-bottom:1px solid #f2f2f2;
+  }
+  #recentSearchList .recentItem:hover { background:#f5f5f5; }
+  #recentSearchList .recentDelete {
+    float:right; color:#aaa; padding:0 4px;
+  }
+
 
   #locateBtn {
     position:fixed; bottom:20px; right:12px; z-index:20;
@@ -104,6 +119,7 @@
   <button id="panelToggle" onclick="togglePanel()">▼ 검색</button>
   <div id="panelBody">
     <input type="text" id="keyword" placeholder="예: 원삼면 펜션, 두창저수지 등">
+    <div id="recentSearchList" style="display:none;"></div>
     <button onclick="searchPlaces()">검색</button>
     <div id="resultList"></div>
   </div>
@@ -196,6 +212,9 @@
     var keyword = document.getElementById('keyword').value.trim();
     if (!keyword) { alert('검색어를 입력해주세요.'); return; }
 
+    saveRecentSearch(keyword);
+    hideRecentSearches();
+
     var combined = [];
     var doneCount = 0;
     var TOTAL_CALLS = 2;
@@ -239,6 +258,76 @@
   document.getElementById('keyword').addEventListener('keydown', function(e){
     if (e.key === 'Enter') searchPlaces();
   });
+
+  // ── 최근 검색어 (이 기기에만 저장, localStorage) ──
+  var RECENT_SEARCHES_KEY = 'recentSearches';
+  var recentSearches = [];
+
+  function loadRecentSearches() {
+    try {
+      var raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+      recentSearches = raw ? JSON.parse(raw) : [];
+    } catch (e) { recentSearches = []; }
+  }
+
+  function saveRecentSearch(term) {
+    term = term.trim();
+    if (!term) return;
+    recentSearches = recentSearches.filter(function(t) { return t !== term; });
+    recentSearches.unshift(term);
+    if (recentSearches.length > 8) recentSearches = recentSearches.slice(0, 8);
+    try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches)); } catch (e) {}
+  }
+
+  function renderRecentSearches() {
+    var el = document.getElementById('recentSearchList');
+    if (!el) return;
+    if (recentSearches.length === 0) {
+      el.innerHTML = '';
+      el.style.display = 'none';
+      return;
+    }
+    var html = '<div class="recentHeader">최근 검색어</div>';
+    recentSearches.forEach(function(term, i) {
+      html += '<div class="recentItem" data-idx="' + i + '">' +
+        term.replace(/</g, '&lt;') +
+        '<span class="recentDelete" data-idx="' + i + '">✕</span></div>';
+    });
+    el.innerHTML = html;
+    el.style.display = 'block';
+  }
+
+  function hideRecentSearches() {
+    var el = document.getElementById('recentSearchList');
+    if (el) el.style.display = 'none';
+  }
+
+  document.getElementById('recentSearchList').addEventListener('click', function(e) {
+    if (e.target.classList.contains('recentDelete')) {
+      var delIdx = parseInt(e.target.getAttribute('data-idx'), 10);
+      recentSearches.splice(delIdx, 1);
+      try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches)); } catch (err) {}
+      renderRecentSearches();
+      return;
+    }
+    var itemEl = e.target.closest ? e.target.closest('.recentItem') : null;
+    if (itemEl) {
+      var idx = parseInt(itemEl.getAttribute('data-idx'), 10);
+      var term = recentSearches[idx];
+      document.getElementById('keyword').value = term;
+      hideRecentSearches();
+      searchPlaces();
+    }
+  });
+
+  document.getElementById('keyword').addEventListener('focus', function() {
+    if (this.value.trim() === '') renderRecentSearches();
+  });
+  document.getElementById('keyword').addEventListener('input', function() {
+    hideRecentSearches();
+  });
+
+  loadRecentSearches();
 
   function renderCombinedResults(results) {
     searchMarkers.forEach(m => m.setMap(null));
