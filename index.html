@@ -783,9 +783,9 @@
       kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
         infowindow.setContent(
-          '<div style="padding:6px;font-size:12px;">' + place.name +
+          '<div style="padding:6px;font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' + place.name +
           '<br>주소: 조회 중...' +
-          ' <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
+          '<br><a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
         );
         infowindow.setPosition(marker.getPosition());
         infowindow.open(map);
@@ -803,9 +803,9 @@
         }, 0);
         getShortAddress(place.lat, place.lng, function(addr) {
           infowindow.setContent(
-            '<div style="padding:6px;font-size:12px;">' + place.name +
+            '<div style="padding:6px;font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' + place.name +
             '<br>주소: ' + (addr || '정보 없음') +
-            ' <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
+            '<br><a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
           );
           var del2 = document.getElementById('deleteSavedPlaceLink');
           if (del2) {
