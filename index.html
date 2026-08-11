@@ -287,6 +287,9 @@
   var navWatchId = null;
   var navUserMarker = null;
   var navTrackingActive = false;
+  var navDisplayPos = null;
+  var navLastFixTime = null;
+  var navAnimRAF = null;
 
   function registerNavPoint(lat, lng, name) {
     var id = 'np_' + (navPointCounter++);
@@ -350,28 +353,78 @@
     }
   }
 
+  function placeNavUserMarker(lat, lng) {
+    var here = new kakao.maps.LatLng(lat, lng);
+    if (navUserMarker) {
+      navUserMarker.setPosition(here);
+    } else {
+      navUserMarker = new kakao.maps.Marker({
+        map: map,
+        position: here,
+        image: new kakao.maps.MarkerImage(
+          'data:image/svg+xml;utf-8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="8" fill="#4285F4" stroke="white" stroke-width="3"/></svg>'
+          ),
+          new kakao.maps.Size(24, 24)
+        )
+      });
+    }
+  }
+
+  // GPS 업데이트 사이 구간을 부드럽게 이어주는 보간 애니메이션
+  function animateNavMarkerTo(targetLat, targetLng, duration) {
+    if (navAnimRAF) {
+      cancelAnimationFrame(navAnimRAF);
+      navAnimRAF = null;
+    }
+    var fromLat = navDisplayPos.lat;
+    var fromLng = navDisplayPos.lng;
+    var startTs = null;
+
+    function step(ts) {
+      if (!navTrackingActive) { navAnimRAF = null; return; }
+      if (!startTs) startTs = ts;
+      var t = Math.min((ts - startTs) / duration, 1);
+      var curLat = fromLat + (targetLat - fromLat) * t;
+      var curLng = fromLng + (targetLng - fromLng) * t;
+      navDisplayPos = { lat: curLat, lng: curLng };
+      placeNavUserMarker(curLat, curLng);
+      map.setCenter(new kakao.maps.LatLng(curLat, curLng));
+      if (t < 1) {
+        navAnimRAF = requestAnimationFrame(step);
+      } else {
+        navAnimRAF = null;
+      }
+    }
+    navAnimRAF = requestAnimationFrame(step);
+  }
+
   function startNavTracking() {
     if (!navigator.geolocation) {
       alert('이 브라우저에서는 위치 추적을 지원하지 않습니다.');
       return;
     }
     navTrackingActive = true;
+    navDisplayPos = null;
+    navLastFixTime = null;
     updateNavUI();
     navWatchId = navigator.geolocation.watchPosition(
       function(pos) {
-        var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
-        if (navUserMarker) navUserMarker.setMap(null);
-        navUserMarker = new kakao.maps.Marker({
-          map: map,
-          position: here,
-          image: new kakao.maps.MarkerImage(
-            'data:image/svg+xml;utf-8,' + encodeURIComponent(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="8" fill="#4285F4" stroke="white" stroke-width="3"/></svg>'
-            ),
-            new kakao.maps.Size(24, 24)
-          )
-        });
-        map.setCenter(here);
+        var newLat = pos.coords.latitude;
+        var newLng = pos.coords.longitude;
+        var now = Date.now();
+
+        if (!navDisplayPos) {
+          // 첫 위치는 바로 표시(보간할 이전 위치가 없음)
+          navDisplayPos = { lat: newLat, lng: newLng };
+          placeNavUserMarker(newLat, newLng);
+          map.setCenter(new kakao.maps.LatLng(newLat, newLng));
+        } else {
+          var duration = navLastFixTime ? (now - navLastFixTime) : 1000;
+          duration = Math.max(500, Math.min(duration, 3000));
+          animateNavMarkerTo(newLat, newLng, duration);
+        }
+        navLastFixTime = now;
       },
       function(err) {
         alert('위치를 가져올 수 없습니다. 위치 권한을 확인해주세요.');
@@ -386,7 +439,13 @@
       navigator.geolocation.clearWatch(navWatchId);
       navWatchId = null;
     }
+    if (navAnimRAF) {
+      cancelAnimationFrame(navAnimRAF);
+      navAnimRAF = null;
+    }
     navTrackingActive = false;
+    navDisplayPos = null;
+    navLastFixTime = null;
     navStart = null;
     navEnd = null;
     if (navUserMarker) { navUserMarker.setMap(null); navUserMarker = null; }
