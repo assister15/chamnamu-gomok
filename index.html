@@ -141,6 +141,28 @@
     padding:1px 5px; border-radius:3px; pointer-events:none;
     white-space:nowrap;
   }
+
+  #navBadges {
+    position:fixed; top:12px; right:12px; z-index:15;
+    display:none; flex-direction:column; gap:6px; align-items:flex-end;
+  }
+  #navBadges.show { display:flex; }
+  .navBadge {
+    background:#fff; padding:6px 10px; border-radius:16px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25); font-size:12px;
+    display:flex; align-items:center; gap:6px; white-space:nowrap;
+  }
+  .navBadgeClear { cursor:pointer; color:#999; font-weight:bold; padding:0 2px; }
+
+  #navActionBtn {
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:25;
+    display:none; padding:12px 30px; border-radius:24px; border:none;
+    font-size:15px; font-weight:bold; box-shadow:0 4px 14px rgba(0,0,0,0.35);
+    cursor:pointer;
+  }
+  #navActionBtn.show { display:block; }
+  #navActionBtn.startState { background:#4b1575; color:#fff; }
+  #navActionBtn.trackingState { background:#e53935; color:#fff; }
 </style>
 
 </head>
@@ -161,6 +183,9 @@
     <div id="resultList"></div>
   </div>
 </div>
+
+<div id="navBadges"></div>
+<button id="navActionBtn"></button>
 
 <div id="map"></div>
 <div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
@@ -242,6 +267,127 @@
   var geocoder = new kakao.maps.services.Geocoder();
   var searchMarkers = [];
   var infowindow = new kakao.maps.InfoWindow({ zIndex: 2 });
+
+  function escapeHtml(str) {
+    return String(str).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ===== 출발/도착(실시간 이동) 기능 =====
+  var navPointsRegistry = {};
+  var navPointCounter = 0;
+  var navStart = null;
+  var navEnd = null;
+  var navWatchId = null;
+  var navUserMarker = null;
+  var navTrackingActive = false;
+
+  function registerNavPoint(lat, lng, name) {
+    var id = 'np_' + (navPointCounter++);
+    navPointsRegistry[id] = { lat: lat, lng: lng, name: name };
+    return id;
+  }
+
+  function buildNavButtonsHtml(lat, lng, name) {
+    var id = registerNavPoint(lat, lng, name);
+    return '<div style="margin-top:6px;display:flex;gap:4px;">' +
+      '<button onclick="handleNavButton(\'start\',\'' + id + '\')" style="flex:1;padding:5px 0;font-size:12px;border:1px solid #4b1575;border-radius:4px;background:#fff;color:#4b1575;">🚩 출발</button>' +
+      '<button onclick="handleNavButton(\'end\',\'' + id + '\')" style="flex:1;padding:5px 0;font-size:12px;border:1px solid #4b1575;border-radius:4px;background:#4b1575;color:#fff;">🏁 도착</button>' +
+      '</div>';
+  }
+
+  function handleNavButton(type, id) {
+    var pt = navPointsRegistry[id];
+    if (!pt) return;
+    if (type === 'start') { navStart = pt; } else { navEnd = pt; }
+    updateNavUI();
+    infowindow.close();
+  }
+
+  function clearNavPoint(type) {
+    if (navTrackingActive) return;
+    if (type === 'start') navStart = null; else navEnd = null;
+    updateNavUI();
+  }
+
+  function updateNavUI() {
+    var badges = document.getElementById('navBadges');
+    var html = '';
+    if (navStart) {
+      html += '<div class="navBadge">🚩 ' + escapeHtml(navStart.name) +
+        (navTrackingActive ? '' : ' <span class="navBadgeClear" onclick="clearNavPoint(\'start\')">✕</span>') + '</div>';
+    }
+    if (navEnd) {
+      html += '<div class="navBadge">🏁 ' + escapeHtml(navEnd.name) +
+        (navTrackingActive ? '' : ' <span class="navBadgeClear" onclick="clearNavPoint(\'end\')">✕</span>') + '</div>';
+    }
+    badges.innerHTML = html;
+    badges.classList.toggle('show', !!(navStart || navEnd));
+
+    var btn = document.getElementById('navActionBtn');
+    if (navTrackingActive) {
+      btn.textContent = '■ 이동 종료';
+      btn.className = 'show trackingState';
+    } else if (navStart && navEnd) {
+      btn.textContent = '▶ 이동 시작';
+      btn.className = 'show startState';
+    } else {
+      btn.className = '';
+    }
+  }
+
+  function toggleNavTracking() {
+    if (navTrackingActive) {
+      stopNavTracking();
+    } else {
+      startNavTracking();
+    }
+  }
+
+  function startNavTracking() {
+    if (!navigator.geolocation) {
+      alert('이 브라우저에서는 위치 추적을 지원하지 않습니다.');
+      return;
+    }
+    navTrackingActive = true;
+    updateNavUI();
+    navWatchId = navigator.geolocation.watchPosition(
+      function(pos) {
+        var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
+        if (navUserMarker) navUserMarker.setMap(null);
+        navUserMarker = new kakao.maps.Marker({
+          map: map,
+          position: here,
+          image: new kakao.maps.MarkerImage(
+            'data:image/svg+xml;utf-8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="8" fill="#4285F4" stroke="white" stroke-width="3"/></svg>'
+            ),
+            new kakao.maps.Size(24, 24)
+          )
+        });
+        map.setCenter(here);
+      },
+      function(err) {
+        alert('위치를 가져올 수 없습니다. 위치 권한을 확인해주세요.');
+        stopNavTracking();
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    );
+  }
+
+  function stopNavTracking() {
+    if (navWatchId !== null) {
+      navigator.geolocation.clearWatch(navWatchId);
+      navWatchId = null;
+    }
+    navTrackingActive = false;
+    navStart = null;
+    navEnd = null;
+    if (navUserMarker) { navUserMarker.setMap(null); navUserMarker = null; }
+    updateNavUI();
+  }
+
+  document.getElementById('navActionBtn').addEventListener('click', toggleNavTracking);
+  // ===== 출발/도착 기능 끝 =====
 
   function searchPlaces() {
     var keyword = document.getElementById('keyword').value.trim();
@@ -388,7 +534,7 @@
 
       kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
-        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + item.title + '</div>');
+        infowindow.setContent('<div style="padding:5px;font-size:13px;width:170px;box-sizing:border-box;">' + item.title + buildNavButtonsHtml(item.y, item.x, item.title) + '</div>');
         infowindow.open(map, marker);
         map.setCenter(pos);
       });
@@ -398,7 +544,7 @@
       row.onclick = function() {
         map.setCenter(pos);
         map.setLevel(4);
-        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + item.title + '</div>');
+        infowindow.setContent('<div style="padding:5px;font-size:13px;width:170px;box-sizing:border-box;">' + item.title + buildNavButtonsHtml(item.y, item.x, item.title) + '</div>');
         infowindow.open(map, marker);
       };
       listEl.appendChild(row);
@@ -904,6 +1050,7 @@
         infowindow.setContent(
           '<div style="padding:6px;font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' + place.name +
           '<br>주소: 조회 중...' +
+          buildNavButtonsHtml(place.lat, place.lng, place.name) +
           '<br><a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
         );
         infowindow.setPosition(marker.getPosition());
@@ -924,6 +1071,7 @@
           infowindow.setContent(
             '<div style="padding:6px;font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' + place.name +
             '<br>주소: ' + (addr || '정보 없음') +
+            buildNavButtonsHtml(place.lat, place.lng, place.name) +
             '<br><a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
           );
           var del2 = document.getElementById('deleteSavedPlaceLink');
