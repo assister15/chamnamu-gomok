@@ -539,21 +539,20 @@
       searchMarkers.push(marker);
       bounds.extend(pos);
 
+      // 지도 위 마커를 직접 탭했을 때만 정보창 + 출발/도착 버튼이 뜸
       kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
         infowindow.setContent('<div style="padding:5px;font-size:13px;width:170px;box-sizing:border-box;">' + item.title + buildNavButtonsHtml(item.y, item.x, item.title) + '</div>');
         infowindow.open(map, marker);
         map.setCenter(pos);
-        collapsePanel();
       });
 
+      // 검색 결과 목록을 탭하면 지도만 이동(패널 접힘). 정보창은 마커를 눌러야 뜸
       var row = document.createElement('div');
       row.textContent = item.title + ' (' + item.subtitle + ')';
       row.onclick = function() {
         map.setCenter(pos);
         map.setLevel(4);
-        infowindow.setContent('<div style="padding:5px;font-size:13px;width:170px;box-sizing:border-box;">' + item.title + buildNavButtonsHtml(item.y, item.x, item.title) + '</div>');
-        infowindow.open(map, marker);
         collapsePanel();
       };
       listEl.appendChild(row);
@@ -1064,7 +1063,6 @@
         );
         infowindow.setPosition(marker.getPosition());
         infowindow.open(map);
-        collapsePanel();
         setTimeout(function() {
           var del = document.getElementById('deleteSavedPlaceLink');
           if (del) {
