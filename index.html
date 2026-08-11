@@ -307,7 +307,11 @@
     if (this.value.trim() === '') renderRecentSearches();
   });
   document.getElementById('keyword').addEventListener('input', function() {
-    hideRecentSearches();
+    if (this.value.trim() === '') {
+      renderRecentSearches();
+    } else {
+      hideRecentSearches();
+    }
   });
 
   loadRecentSearches();
