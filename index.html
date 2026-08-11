@@ -236,6 +236,13 @@
     btn.textContent = panel.classList.contains('collapsed') ? '▼ 검색' : '▲ 접기';
   }
 
+  function collapsePanel() {
+    var panel = document.getElementById('panel');
+    var btn = document.getElementById('panelToggle');
+    panel.classList.add('collapsed');
+    btn.textContent = '▼ 검색';
+  }
+
   var mapContainer = document.getElementById('map');
   var savedView = null;
   try {
@@ -537,6 +544,7 @@
         infowindow.setContent('<div style="padding:5px;font-size:13px;width:170px;box-sizing:border-box;">' + item.title + buildNavButtonsHtml(item.y, item.x, item.title) + '</div>');
         infowindow.open(map, marker);
         map.setCenter(pos);
+        collapsePanel();
       });
 
       var row = document.createElement('div');
@@ -546,6 +554,7 @@
         map.setLevel(4);
         infowindow.setContent('<div style="padding:5px;font-size:13px;width:170px;box-sizing:border-box;">' + item.title + buildNavButtonsHtml(item.y, item.x, item.title) + '</div>');
         infowindow.open(map, marker);
+        collapsePanel();
       };
       listEl.appendChild(row);
     });
@@ -1055,6 +1064,7 @@
         );
         infowindow.setPosition(marker.getPosition());
         infowindow.open(map);
+        collapsePanel();
         setTimeout(function() {
           var del = document.getElementById('deleteSavedPlaceLink');
           if (del) {
