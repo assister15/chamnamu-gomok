@@ -241,6 +241,7 @@
     var btn = document.getElementById('panelToggle');
     panel.classList.add('collapsed');
     btn.textContent = '▼ 검색';
+    document.getElementById('keyword').value = '';
   }
 
   var mapContainer = document.getElementById('map');
@@ -335,11 +336,16 @@
     );
     if (type === 'start') {
       if (navStartMarker) navStartMarker.setMap(null);
-      navStartMarker = new kakao.maps.Marker({ map: map, position: here, image: image });
+      navStartMarker = new kakao.maps.Marker({ map: map, position: here, image: image, zIndex: 20 });
     } else {
       if (navEndMarker) navEndMarker.setMap(null);
-      navEndMarker = new kakao.maps.Marker({ map: map, position: here, image: image });
+      navEndMarker = new kakao.maps.Marker({ map: map, position: here, image: image, zIndex: 20 });
     }
+  }
+
+  function clearSearchMarkers() {
+    searchMarkers.forEach(function(m) { m.setMap(null); });
+    searchMarkers = [];
   }
 
   function handleNavButton(type, id) {
@@ -347,6 +353,8 @@
     if (!pt) return;
     if (type === 'start') { navStart = pt; } else { navEnd = pt; }
     placeNavPointMarker(type, pt.lat, pt.lng);
+    // 출발/도착으로 확정된 검색 마커들은 이제 필요 없으므로 정리
+    clearSearchMarkers();
     updateNavUI();
     infowindow.close();
   }
@@ -448,6 +456,7 @@
       alert('이 브라우저에서는 위치 추적을 지원하지 않습니다.');
       return;
     }
+    clearSearchMarkers();
     navTrackingActive = true;
     navDisplayPos = null;
     navLastFixTime = null;
