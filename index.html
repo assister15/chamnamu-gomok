@@ -308,6 +308,9 @@
   });
   document.getElementById('keyword').addEventListener('input', function() {
     if (this.value.trim() === '') {
+      document.getElementById('resultList').innerHTML = '';
+      searchMarkers.forEach(function(m) { m.setMap(null); });
+      searchMarkers = [];
       renderRecentSearches();
     } else {
       hideRecentSearches();
