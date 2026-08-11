@@ -286,10 +286,30 @@
   var navEnd = null;
   var navWatchId = null;
   var navUserMarker = null;
+  var navStartMarker = null;
+  var navEndMarker = null;
   var navTrackingActive = false;
   var navDisplayPos = null;
   var navLastFixTime = null;
   var navAnimRAF = null;
+
+  var NAV_START_FLAG_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32">' +
+    '<line x1="4" y1="4" x2="4" y2="30" stroke="#333" stroke-width="2"/>' +
+    '<path d="M4 4 L22 9 L4 14 Z" fill="#e53935" stroke="#333" stroke-width="1"/>' +
+    '</svg>';
+
+  var NAV_END_FLAG_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32">' +
+    '<line x1="4" y1="4" x2="4" y2="30" stroke="#333" stroke-width="2"/>' +
+    '<path d="M4 4 L22 9 L4 14 Z" fill="#fff" stroke="#333" stroke-width="1"/>' +
+    '<rect x="4" y="4" width="4.5" height="2.5" fill="#111"/>' +
+    '<rect x="13" y="4" width="4.5" height="2.5" fill="#111"/>' +
+    '<rect x="8.5" y="6.5" width="4.5" height="2.5" fill="#111"/>' +
+    '<rect x="17.5" y="6.5" width="4.5" height="2.5" fill="#111"/>' +
+    '<rect x="4" y="9" width="4.5" height="2.5" fill="#111"/>' +
+    '<rect x="13" y="9" width="4.5" height="2.5" fill="#111"/>' +
+    '</svg>';
 
   function registerNavPoint(lat, lng, name) {
     var id = 'np_' + (navPointCounter++);
@@ -305,17 +325,41 @@
       '</div>';
   }
 
+  function placeNavPointMarker(type, lat, lng) {
+    var here = new kakao.maps.LatLng(lat, lng);
+    var svg = type === 'start' ? NAV_START_FLAG_SVG : NAV_END_FLAG_SVG;
+    var image = new kakao.maps.MarkerImage(
+      'data:image/svg+xml;utf-8,' + encodeURIComponent(svg),
+      new kakao.maps.Size(24, 32),
+      { offset: new kakao.maps.Point(4, 30) }
+    );
+    if (type === 'start') {
+      if (navStartMarker) navStartMarker.setMap(null);
+      navStartMarker = new kakao.maps.Marker({ map: map, position: here, image: image });
+    } else {
+      if (navEndMarker) navEndMarker.setMap(null);
+      navEndMarker = new kakao.maps.Marker({ map: map, position: here, image: image });
+    }
+  }
+
   function handleNavButton(type, id) {
     var pt = navPointsRegistry[id];
     if (!pt) return;
     if (type === 'start') { navStart = pt; } else { navEnd = pt; }
+    placeNavPointMarker(type, pt.lat, pt.lng);
     updateNavUI();
     infowindow.close();
   }
 
   function clearNavPoint(type) {
     if (navTrackingActive) return;
-    if (type === 'start') navStart = null; else navEnd = null;
+    if (type === 'start') {
+      navStart = null;
+      if (navStartMarker) { navStartMarker.setMap(null); navStartMarker = null; }
+    } else {
+      navEnd = null;
+      if (navEndMarker) { navEndMarker.setMap(null); navEndMarker = null; }
+    }
     updateNavUI();
   }
 
@@ -449,6 +493,8 @@
     navStart = null;
     navEnd = null;
     if (navUserMarker) { navUserMarker.setMap(null); navUserMarker = null; }
+    if (navStartMarker) { navStartMarker.setMap(null); navStartMarker = null; }
+    if (navEndMarker) { navEndMarker.setMap(null); navEndMarker = null; }
     updateNavUI();
   }
 
