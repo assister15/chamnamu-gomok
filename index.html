@@ -112,6 +112,17 @@
   #toggleLayerBtn.off { background:#ddd; opacity:0.6; }
   #toggleLayerBtn:active { background:#f0f0f0; }
 
+  #trackToggleBtn {
+    position:fixed; top:12px; right:12px; z-index:20;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  #trackToggleBtn:active { background:#f0f0f0; }
+  #trackToggleBtn.active { background:#7a3ea1; }
+  #trackToggleBtn svg path { fill:#4b1575; transition: fill 0.15s ease; }
+  #trackToggleBtn.active svg path { fill:#fff; }
+
   #roadviewPanel {
     position:fixed; top:0; left:0; width:100%; height:100%;
     z-index:50; display:none; background:#000;
@@ -143,7 +154,7 @@
   }
 
   #navBadges {
-    position:fixed; top:12px; right:12px; z-index:15;
+    position:fixed; top:64px; right:12px; z-index:15;
     display:none; flex-direction:column; gap:6px; align-items:flex-end;
   }
   #navBadges.show { display:flex; }
@@ -184,6 +195,9 @@
   </div>
 </div>
 
+<button id="trackToggleBtn" title="내 위치 실시간 추적">
+  <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 2 L19 21 L12 17 L5 21 Z"/></svg>
+</button>
 <div id="navBadges"></div>
 <button id="navActionBtn"></button>
 
@@ -354,7 +368,6 @@
     if (!pt) return;
     if (type === 'start') { navStart = pt; } else { navEnd = pt; }
     placeNavPointMarker(type, pt.lat, pt.lng);
-    // 출발/도착으로 확정된 검색 마커들은 이제 필요 없으므로 정리
     clearSearchMarkers();
     updateNavUI();
     infowindow.close();
@@ -396,6 +409,9 @@
     } else {
       btn.className = '';
     }
+
+    var trackBtn = document.getElementById('trackToggleBtn');
+    trackBtn.classList.toggle('active', navTrackingActive);
   }
 
   function toggleNavTracking() {
@@ -424,7 +440,6 @@
     }
   }
 
-  // GPS 업데이트 사이 구간을 부드럽게 이어주는 보간 애니메이션
   function animateNavMarkerTo(targetLat, targetLng, duration) {
     if (navAnimRAF) {
       cancelAnimationFrame(navAnimRAF);
@@ -469,7 +484,6 @@
         var now = Date.now();
 
         if (!navDisplayPos) {
-          // 첫 위치는 바로 표시(보간할 이전 위치가 없음)
           navDisplayPos = { lat: newLat, lng: newLng };
           placeNavUserMarker(newLat, newLng);
           map.setCenter(new kakao.maps.LatLng(newLat, newLng));
@@ -509,6 +523,7 @@
   }
 
   document.getElementById('navActionBtn').addEventListener('click', toggleNavTracking);
+  document.getElementById('trackToggleBtn').addEventListener('click', toggleNavTracking);
   // ===== 출발/도착 기능 끝 =====
 
   function searchPlaces() {
@@ -654,7 +669,6 @@
       searchMarkers.push(marker);
       bounds.extend(pos);
 
-      // 지도 위 마커를 직접 탭했을 때만 정보창 + 출발/도착 버튼이 뜸
       kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
         infowindow.setContent('<div style="padding:5px;font-size:13px;width:170px;box-sizing:border-box;">' + item.title + buildNavButtonsHtml(item.y, item.x, item.title) + '</div>');
@@ -662,7 +676,6 @@
         map.setCenter(pos);
       });
 
-      // 검색 결과 목록을 탭하면 지도만 이동(패널 접힘). 정보창은 마커를 눌러야 뜸
       var row = document.createElement('div');
       row.textContent = item.title + ' (' + item.subtitle + ')';
       row.onclick = function() {
