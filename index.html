@@ -155,9 +155,11 @@
     cursor:pointer; color:#888;
   }
   .savedListItem {
-    padding:10px 6px; border-bottom:1px solid #eee; cursor:pointer; font-size:14px;
+    padding:8px 6px; border-bottom:1px solid #eee; cursor:pointer; font-size:14px;
   }
   .savedListItem:last-child { border-bottom:none; }
+  .savedListItemName { font-weight:bold; }
+  .savedListItemAddr { font-size:12px; color:#888; margin-top:2px; }
   .savedListEmpty { padding:20px 0; text-align:center; color:#999; font-size:13px; }
 
   #roadviewPanel {
@@ -345,25 +347,67 @@
     return String(str).replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  function getShortAddress(lat, lng, callback) {
+    geocoder.coord2Address(lng, lat, function(result, status) {
+      if (status !== kakao.maps.services.Status.OK || !result || !result[0]) {
+        callback(null);
+        return;
+      }
+      var r = result[0];
+      if (r.road_address && r.road_address.road_name) {
+        var ra = r.road_address;
+        var no = ra.main_building_no || '';
+        if (ra.sub_building_no && ra.sub_building_no !== '0') {
+          no += '-' + ra.sub_building_no;
+        }
+        callback((ra.road_name + ' ' + no).trim());
+        return;
+      }
+      if (r.address) {
+        var a = r.address;
+        var dong = a.region_3depth_name || '';
+        var jibun = a.main_address_no || '';
+        if (a.sub_address_no && a.sub_address_no !== '0') {
+          jibun += '-' + a.sub_address_no;
+        }
+        callback((dong + ' ' + jibun).trim());
+        return;
+      }
+      callback(null);
+    });
+  }
+
   // ===== 저장 장소 목록 패널 =====
   function openSavedList() {
     var itemsEl = document.getElementById('savedListItems');
+    itemsEl.innerHTML = '';
     if (savedPlaces.length === 0) {
       itemsEl.innerHTML = '<div class="savedListEmpty">저장된 장소가 없습니다.</div>';
-    } else {
-      itemsEl.innerHTML = '';
-      savedPlaces.forEach(function(place) {
-        var row = document.createElement('div');
-        row.className = 'savedListItem';
-        row.textContent = place.name;
-        row.onclick = function() {
-          map.setCenter(new kakao.maps.LatLng(place.lat, place.lng));
-          map.setLevel(4);
-          closeSavedList();
-        };
-        itemsEl.appendChild(row);
-      });
+      document.getElementById('savedListOverlay').classList.add('show');
+      return;
     }
+    savedPlaces.forEach(function(place) {
+      var row = document.createElement('div');
+      row.className = 'savedListItem';
+      var nameDiv = document.createElement('div');
+      nameDiv.className = 'savedListItemName';
+      nameDiv.textContent = place.name;
+      var addrDiv = document.createElement('div');
+      addrDiv.className = 'savedListItemAddr';
+      addrDiv.textContent = '주소 조회 중...';
+      row.appendChild(nameDiv);
+      row.appendChild(addrDiv);
+      row.onclick = function() {
+        map.setCenter(new kakao.maps.LatLng(place.lat, place.lng));
+        map.setLevel(4);
+        closeSavedList();
+      };
+      itemsEl.appendChild(row);
+
+      getShortAddress(place.lat, place.lng, function(addr) {
+        addrDiv.textContent = addr || '주소 정보 없음';
+      });
+    });
     document.getElementById('savedListOverlay').classList.add('show');
   }
 
@@ -1296,36 +1340,6 @@
 
   function persistSavedPlaces() {
     try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
-  }
-
-  function getShortAddress(lat, lng, callback) {
-    geocoder.coord2Address(lng, lat, function(result, status) {
-      if (status !== kakao.maps.services.Status.OK || !result || !result[0]) {
-        callback(null);
-        return;
-      }
-      var r = result[0];
-      if (r.road_address && r.road_address.road_name) {
-        var ra = r.road_address;
-        var no = ra.main_building_no || '';
-        if (ra.sub_building_no && ra.sub_building_no !== '0') {
-          no += '-' + ra.sub_building_no;
-        }
-        callback((ra.road_name + ' ' + no).trim());
-        return;
-      }
-      if (r.address) {
-        var a = r.address;
-        var dong = a.region_3depth_name || '';
-        var jibun = a.main_address_no || '';
-        if (a.sub_address_no && a.sub_address_no !== '0') {
-          jibun += '-' + a.sub_address_no;
-        }
-        callback((dong + ' ' + jibun).trim());
-        return;
-      }
-      callback(null);
-    });
   }
 
   function renderSavedPlaces() {
