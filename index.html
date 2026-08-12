@@ -990,6 +990,7 @@
   function buildInfoContent(p, elevText, showRetry) {
     return '<div style="padding:6px;font-size:12px;">' +
       (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
+      (p.DMCLS_NM ? (' / ' + p.DMCLS_NM) : '') +
       (elevText ? '<br>' + elevText : '') +
       (showRetry ? ' <a href="#" id="elevRetryLink" style="color:#4b1575;text-decoration:underline;">다시 시도</a>' : '') +
       '</div>';
