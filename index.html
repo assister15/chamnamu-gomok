@@ -947,6 +947,26 @@
     '1': '#e6f5f9'
   };
 
+  // 영급 문자열("9영급" 등)에서 숫자만 추출
+  function parseAgeGrade(agclsStr) {
+    var m = String(agclsStr || '').match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  // 영급+경급 조합을 5단계 진하기 중 하나(9/7/5/3/1, 숫자가 클수록 진함)로 매핑
+  // 7~9영급+대경목(가장 진함) > 7~9영급+소중경목 > 4~6영급+대경목 > 4~6영급+소중경목 > 1~3영급 전체(가장 연함)
+  function shadeKeyForGradeCombo(agclsStr, dmclsStr) {
+    var age = parseAgeGrade(agclsStr);
+    var isLarge = String(dmclsStr || '').indexOf('대경목') !== -1;
+    if (age >= 7) {
+      return isLarge ? '9' : '7';
+    } else if (age >= 4) {
+      return isLarge ? '5' : '3';
+    } else {
+      return '1';
+    }
+  }
+
   function colorByGrade(props) {
     var species = String(props.KOFTR_NM || '');
     var palette;
@@ -957,11 +977,8 @@
     } else {
       palette = GRADE_COLORS;
     }
-    var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
-    for (var g = 9; g >= 1; g--) {
-      if (grade.includes(String(g))) return palette[String(g)];
-    }
-    return palette['1'];
+    var shadeKey = shadeKeyForGradeCombo(props.AGCLS_NM || props.AGCLS_CD, props.DMCLS_NM);
+    return palette[shadeKey];
   }
 
   function hexToRgba(hex, alpha) {
