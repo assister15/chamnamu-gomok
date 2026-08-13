@@ -1199,14 +1199,20 @@
     searchMarkers = [];
   });
 
+  // 줌 애니메이션 도중에는 지도가 스스로 부드럽게 확대/축소되는 전환 동작을 하는데,
+  // 이 전환 중에 카카오 지도가 중심점을 보정하면서 center_changed도 같이 발생함.
+  // 그 타이밍에 폴리곤을 다시 그려버리면 아직 안 끝난 애니메이션 위치 기준으로 그려져서
+  // "떴다가 제자리로 돌아오는" 것처럼 보임. 그래서 줌이 완전히 끝날 때까지는
+  // center_changed가 와도 다시 그리지 않도록 막아둠.
+  var zoomTransitioning = false;
+
   kakao.maps.event.addListener(map, 'center_changed', function() {
+    if (zoomTransitioning) return;
     renderVisiblePolygons();
     infowindow._reposition();
   });
-  // 줌 애니메이션 도중에는 지도와 폴리곤의 이동 속도가 서로 달라서
-  // "폴리곤이 떴다가 제자리로 돌아오는" 것처럼 보이는 문제가 있었음.
-  // 그래서 줌 중에는 폴리곤을 잠깐 지워두고, 줌이 완전히 끝난 뒤(idle)에만 다시 그림.
   kakao.maps.event.addListener(map, 'zoom_changed', function() {
+    zoomTransitioning = true;
     var cw = mapContainer.clientWidth, ch = mapContainer.clientHeight;
     polyCtx.clearRect(0, 0, cw, ch);
     infowindow.close();
@@ -1411,6 +1417,7 @@
   }
 
   function onMapIdle() {
+    zoomTransitioning = false;
     if (!tileManifest) return;
 
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) {
