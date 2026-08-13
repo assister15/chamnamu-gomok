@@ -20,9 +20,7 @@
     position:fixed; top:0; left:0; width:100%; height:calc(var(--vh, 1vh) * 100);
     z-index:4; pointer-events:none;
   }
-  #polyCanvas, #infoPopup, #savedMarkersLayer {
-    transition: opacity 0.15s ease;
-  }
+  /* 줌 도중엔 즉시 사라지고, 줌이 끝나면 즉시 나타나도록 트랜지션 없이 순간 전환 */
 
   #splashScreen {
     position:fixed; top:0; left:0; width:100%; height:100%;
