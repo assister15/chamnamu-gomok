@@ -942,25 +942,6 @@
     '1': '#e6f5f9'
   };
 
-  // 영급 문자열("9영급" 등)에서 숫자만 추출
-  function parseAgeGrade(agclsStr) {
-    var m = String(agclsStr || '').match(/(\d+)/);
-    return m ? parseInt(m[1], 10) : 0;
-  }
-
-  // 영급+경급 조합을 5단계 진하기 중 하나(9/7/5/3/1, 숫자가 클수록 진함)로 매핑
-  function shadeKeyForGradeCombo(agclsStr, dmclsStr) {
-    var age = parseAgeGrade(agclsStr);
-    var isLarge = String(dmclsStr || '').indexOf('대경목') !== -1;
-    if (age >= 7) {
-      return isLarge ? '9' : '7';
-    } else if (age >= 4) {
-      return isLarge ? '5' : '3';
-    } else {
-      return '1';
-    }
-  }
-
   function colorByGrade(props) {
     var species = String(props.KOFTR_NM || '');
     var palette;
@@ -971,8 +952,11 @@
     } else {
       palette = GRADE_COLORS;
     }
-    var shadeKey = shadeKeyForGradeCombo(props.AGCLS_NM || props.AGCLS_CD, props.DMCLS_NM);
-    return palette[shadeKey];
+    var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
+    for (var g = 9; g >= 1; g--) {
+      if (grade.includes(String(g))) return palette[String(g)];
+    }
+    return palette['1'];
   }
 
   function getBbox(coordsList) {
@@ -1059,35 +1043,6 @@
       });
   }
 
-  // ===== 점-다각형 판정(같은 색으로 묶은 폴리곤 클릭 시 원래 어떤 조각인지 찾기 위함) =====
-  function pointInRing(lng, lat, ring) {
-    var inside = false;
-    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      var xi = ring[i][0], yi = ring[i][1];
-      var xj = ring[j][0], yj = ring[j][1];
-      var intersect = ((yi > lat) !== (yj > lat)) &&
-        (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  function featureContainsPoint(f, lng, lat) {
-    for (var p = 0; p < f.coordsList.length; p++) {
-      var rings = f.coordsList[p];
-      if (!rings || !rings[0]) continue;
-      if (pointInRing(lng, lat, rings[0])) {
-        var inHole = false;
-        for (var h = 1; h < rings.length; h++) {
-          if (pointInRing(lng, lat, rings[h])) { inHole = true; break; }
-        }
-        if (!inHole) return true;
-      }
-    }
-    return false;
-  }
-  // ===== 점-다각형 판정 끝 =====
-
   function renderVisiblePolygons() {
     clearCurrentPolygons();
     if (!showPolygons) return;
@@ -1097,57 +1052,38 @@
 
     var bounds = map.getBounds();
     var drawn = 0;
-    var groups = {}; // 색상 -> { paths: [...], features: [...] }
 
     for (var i = 0; i < allFeatures.length; i++) {
       if (drawn >= MAX_POLYGONS_ON_SCREEN) break;
       let f = allFeatures[i];
       if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
 
-      var color = colorByGrade(f.properties);
-      if (!groups[color]) groups[color] = { paths: [], features: [] };
-
       f.coordsList.forEach(function(polyCoords) {
         if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
         var path = polyCoords[0].map(c => new kakao.maps.LatLng(c[1], c[0]));
-        groups[color].paths.push(path);
+        var polygon = new kakao.maps.Polygon({
+          map: map,
+          path: path,
+          strokeWeight: 1,
+          strokeColor: '#4b1575',
+          strokeOpacity: 0.8,
+          fillColor: colorByGrade(f.properties),
+          fillOpacity: 0.55
+        });
+        currentPolygons.push(polygon);
+
+        kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
+          suppressNextMapClick = true;
+          var p = f.properties;
+          var lat = mouseEvent.latLng.getLat();
+          var lng = mouseEvent.latLng.getLng();
+          infowindow.setPosition(mouseEvent.latLng);
+          infowindow.open(map);
+          requestElevation(p, lat, lng);
+        });
       });
-      groups[color].features.push(f);
       drawn++;
     }
-
-    Object.keys(groups).forEach(function(color) {
-      var group = groups[color];
-      if (group.paths.length === 0) return;
-
-      var polygon = new kakao.maps.Polygon({
-        map: map,
-        path: group.paths,
-        strokeWeight: 1,
-        strokeColor: '#4b1575',
-        strokeOpacity: 0.8,
-        fillColor: color,
-        fillOpacity: 0.55
-      });
-      currentPolygons.push(polygon);
-
-      kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
-        suppressNextMapClick = true;
-        var lat = mouseEvent.latLng.getLat();
-        var lng = mouseEvent.latLng.getLng();
-        var matched = null;
-        for (var k = 0; k < group.features.length; k++) {
-          if (featureContainsPoint(group.features[k], lng, lat)) {
-            matched = group.features[k];
-            break;
-          }
-        }
-        if (!matched) matched = group.features[0];
-        infowindow.setPosition(mouseEvent.latLng);
-        infowindow.open(map);
-        requestElevation(matched.properties, lat, lng);
-      });
-    });
   }
 
   kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
