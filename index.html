@@ -414,7 +414,34 @@
   var ps = new kakao.maps.services.Places();
   var geocoder = new kakao.maps.services.Geocoder();
   var searchMarkers = [];
-  var infowindow = new kakao.maps.InfoWindow({ zIndex: 2 });
+
+  // ===== 정보창(말풍선) — 카카오 기본 InfoWindow 대신 커스텀 오버레이로 직접 구현 =====
+  // (기본 InfoWindow는 흰 배경이 고정이라 투명하게 만들 수 없고, 폭도 자동으로 딱 맞지 않아서 교체)
+  var infowindow = {
+    overlay: null,
+    _ensure: function() {
+      if (!this.overlay) {
+        this.overlay = new kakao.maps.CustomOverlay({ content: '', yAnchor: 1, zIndex: 3, clickable: true });
+      }
+    },
+    setContent: function(html) {
+      this._ensure();
+      this.overlay.setContent(html);
+    },
+    setPosition: function(pos) {
+      this._ensure();
+      this.overlay.setPosition(pos);
+    },
+    open: function(map, marker) {
+      this._ensure();
+      if (marker) this.overlay.setPosition(marker.getPosition());
+      this.overlay.setMap(map);
+    },
+    close: function() {
+      if (this.overlay) this.overlay.setMap(null);
+    }
+  };
+  // ===== 정보창 끝 =====
 
   function getShortAddress(lat, lng, callback) {
     geocoder.coord2Address(lng, lat, function(result, status) {
@@ -854,7 +881,10 @@
 
       kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
-        infowindow.setContent('<div style="padding:5px;font-size:13px;">' + item.title + '</div>');
+        infowindow.setContent(
+          '<div style="background:rgba(255,255,255,0.88);padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:13px;max-width:220px;">' +
+          item.title + '</div>'
+        );
         infowindow.open(map, marker);
         map.setCenter(pos);
       });
@@ -988,7 +1018,7 @@
   }
 
   function buildInfoContent(p, elevText, showRetry) {
-    return '<div style="padding:6px;font-size:12px;">' +
+    return '<div style="background:rgba(255,255,255,0.88);padding:8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;white-space:nowrap;">' +
       (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
       (p.DMCLS_NM ? (' / ' + p.DMCLS_NM + '(추정)') : '') +
       (elevText ? '<br>' + elevText : '') +
@@ -1385,7 +1415,7 @@
     var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     var memoLine = place.memo ? ('<br><span style="font-size:12px;">' + escapeHtml(place.memo) + '</span>') : '';
     infowindow.setContent(
-      '<div style="padding:6px;font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
+      '<div style="background:rgba(255,255,255,0.88);padding:8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
       escapeHtml(place.name) + dateLine +
       '<br>주소: ' + escapeHtml(addrText) + memoLine +
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
