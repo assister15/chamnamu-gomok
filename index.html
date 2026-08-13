@@ -16,6 +16,13 @@
   #infoPopup {
     position:fixed; top:0; left:0; z-index:5; display:none; pointer-events:auto;
   }
+  #savedMarkersLayer {
+    position:fixed; top:0; left:0; width:100%; height:calc(var(--vh, 1vh) * 100);
+    z-index:4; pointer-events:none;
+  }
+  #polyCanvas, #infoPopup, #savedMarkersLayer {
+    transition: opacity 0.15s ease;
+  }
 
   #splashScreen {
     position:fixed; top:0; left:0; width:100%; height:100%;
@@ -331,6 +338,7 @@
 <div id="map"></div>
 <canvas id="polyCanvas"></canvas>
 <div id="infoPopup"></div>
+<div id="savedMarkersLayer"></div>
 <div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
 <button id="roadviewBtn" title="로드뷰 모드">🚶</button>
@@ -429,6 +437,7 @@
   // (캔버스 폴리곤 레이어와 마찬가지로 이 div도 우리가 z-index를 직접 통제하는 요소라서,
   //  카카오 내부 오버레이 레이어 구조와 z-index 경합 없이 항상 폴리곤 위에 뜨는 게 보장됨)
   var infoPopupEl = document.getElementById('infoPopup');
+  var savedMarkersLayer = document.getElementById('savedMarkersLayer');
   var infowindow = {
     _pos: null,
     _visible: false,
@@ -1199,23 +1208,23 @@
     searchMarkers = [];
   });
 
-  // 줌 애니메이션 도중에는 지도가 스스로 부드럽게 확대/축소되는 전환 동작을 하는데,
-  // 이 전환 중에 카카오 지도가 중심점을 보정하면서 center_changed도 같이 발생함.
-  // 그 타이밍에 폴리곤을 다시 그려버리면 아직 안 끝난 애니메이션 위치 기준으로 그려져서
-  // "떴다가 제자리로 돌아오는" 것처럼 보임. 그래서 줌이 완전히 끝날 때까지는
-  // center_changed가 와도 다시 그리지 않도록 막아둠.
+  // 줌 애니메이션(카카오 지도 자체의 부드러운 확대/축소 전환)은 우리가 그리는
+  // 폴리곤/정보창/저장마커 레이어와 완벽히 동기화할 방법이 없어서, 그 도중에 다시 그리면
+  // 위치가 어긋나 보이는 문제가 있었음. 완벽한 동기화 대신, 줌 도중엔 이 레이어들을
+  // 부드럽게 페이드아웃했다가, 줌이 완전히 끝난 뒤 새 위치로 그려놓고 다시 페이드인함.
   var zoomTransitioning = false;
 
   kakao.maps.event.addListener(map, 'center_changed', function() {
     if (zoomTransitioning) return;
     renderVisiblePolygons();
     infowindow._reposition();
+    repositionSavedMarkers();
   });
   kakao.maps.event.addListener(map, 'zoom_changed', function() {
     zoomTransitioning = true;
-    var cw = mapContainer.clientWidth, ch = mapContainer.clientHeight;
-    polyCtx.clearRect(0, 0, cw, ch);
-    infowindow.close();
+    polyCanvas.style.opacity = '0';
+    infoPopupEl.style.opacity = '0';
+    savedMarkersLayer.style.opacity = '0';
   });
 
   var myLocationMarker = null;
@@ -1418,10 +1427,20 @@
 
   function onMapIdle() {
     zoomTransitioning = false;
-    if (!tileManifest) return;
+
+    function finishAndFadeIn() {
+      infowindow._reposition();
+      repositionSavedMarkers();
+      polyCanvas.style.opacity = '1';
+      infoPopupEl.style.opacity = '1';
+      savedMarkersLayer.style.opacity = '1';
+    }
+
+    if (!tileManifest) { finishAndFadeIn(); return; }
 
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) {
       renderVisiblePolygons();
+      finishAndFadeIn();
       return;
     }
 
@@ -1432,6 +1451,7 @@
     });
 
     renderVisiblePolygons();
+    finishAndFadeIn();
 
     if (toFetch.length > 0) {
       Promise.all(toFetch.map(fetchTile)).then(function() {
@@ -1512,27 +1532,47 @@
     try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
   }
 
+  // 저장 장소 마커도 카카오 기본 Marker 대신, 정보창과 같은 방식(좌표->화면픽셀 직접계산)으로
+  // 그리는 순수 img 태그로 구현 — 카카오 마커가 캔버스 뒤로 가려지는 것과 같은 문제라서
+  // 이미 검증된 같은 방법으로 근본 해결
   function renderSavedPlaces() {
-    savedPlaceMarkers.forEach(function(m) { m.setMap(null); });
+    savedMarkersLayer.innerHTML = '';
     savedPlaceMarkers = [];
     savedPlaces.forEach(function(place, idx) {
-      var marker = new kakao.maps.Marker({
-        map: map,
-        position: new kakao.maps.LatLng(place.lat, place.lng),
-        image: buildSavedPlaceMarkerImage(place.icon)
-      });
-      kakao.maps.event.addListener(marker, 'click', function() {
+      var img = document.createElement('img');
+      img.src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(
+        place.icon === 'circle' ? CIRCLE_MARKER_SVG : STAR_MARKER_SVG
+      );
+      img.style.position = 'absolute';
+      img.style.width = (place.icon === 'circle' ? '26px' : '30px');
+      img.style.transform = 'translate(-50%, -50%)';
+      img.style.pointerEvents = 'auto';
+      img.style.cursor = 'pointer';
+      img.addEventListener('click', function(e) {
+        e.stopPropagation();
         suppressNextMapClick = true;
-        showSavedPlaceInfo(marker, place, idx, '조회 중...');
+        showSavedPlaceInfo(place, idx, '조회 중...');
         getShortAddress(place.lat, place.lng, function(addr) {
-          showSavedPlaceInfo(marker, place, idx, addr || '정보 없음');
+          showSavedPlaceInfo(place, idx, addr || '정보 없음');
         });
       });
-      savedPlaceMarkers.push(marker);
+      savedMarkersLayer.appendChild(img);
+      savedPlaceMarkers.push({ el: img, place: place });
+    });
+    repositionSavedMarkers();
+  }
+
+  function repositionSavedMarkers() {
+    if (savedPlaceMarkers.length === 0) return;
+    var proj = map.getProjection();
+    savedPlaceMarkers.forEach(function(item) {
+      var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(item.place.lat, item.place.lng));
+      item.el.style.left = pt.x + 'px';
+      item.el.style.top = pt.y + 'px';
     });
   }
 
-  function showSavedPlaceInfo(marker, place, idx, addrText) {
+  function showSavedPlaceInfo(place, idx, addrText) {
     var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     var memoLine = place.memo ? ('<br><span style="font-size:12px;">' + escapeHtml(place.memo) + '</span>') : '';
     infowindow.setContent(
@@ -1542,7 +1582,7 @@
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
       ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
     );
-    infowindow.setPosition(marker.getPosition());
+    infowindow.setPosition(new kakao.maps.LatLng(place.lat, place.lng));
     infowindow.open(map);
     setTimeout(function() {
       var editLink = document.getElementById('editSavedPlaceLink');
