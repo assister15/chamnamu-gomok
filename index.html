@@ -9,18 +9,6 @@
 <style>
   html, body { margin:0; padding:0; height:100%; height:calc(var(--vh, 1vh) * 100); font-family:'Malgun Gothic', sans-serif; overflow:hidden; }
   #map { width:100%; height:100%; }
-  #polyCanvas {
-    position:fixed; top:0; left:0; width:100%; height:calc(var(--vh, 1vh) * 100);
-    z-index:1; pointer-events:none;
-  }
-  #infoPopup {
-    position:fixed; top:0; left:0; z-index:5; display:none; pointer-events:auto;
-  }
-  #savedMarkersLayer {
-    position:fixed; top:0; left:0; width:100%; height:calc(var(--vh, 1vh) * 100);
-    z-index:4; pointer-events:none;
-  }
-  /* 줌 도중엔 즉시 사라지고, 줌이 끝나면 즉시 나타나도록 트랜지션 없이 순간 전환 */
 
   #splashScreen {
     position:fixed; top:0; left:0; width:100%; height:100%;
@@ -334,9 +322,6 @@
 </div>
 
 <div id="map"></div>
-<canvas id="polyCanvas"></canvas>
-<div id="infoPopup"></div>
-<div id="savedMarkersLayer"></div>
 <div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
 <button id="roadviewBtn" title="로드뷰 모드">🚶</button>
@@ -369,7 +354,6 @@
       var center = map.getCenter();
       map.relayout();
       map.setCenter(center);
-      if (typeof renderVisiblePolygons === 'function') renderVisiblePolygons();
     }
   }
   setRealViewportHeight();
@@ -431,38 +415,29 @@
   var geocoder = new kakao.maps.services.Geocoder();
   var searchMarkers = [];
 
-  // ===== 정보창(말풍선) — 카카오 CustomOverlay 대신 우리가 직접 위치를 계산해서 그리는 순수 div로 구현 =====
-  // (캔버스 폴리곤 레이어와 마찬가지로 이 div도 우리가 z-index를 직접 통제하는 요소라서,
-  //  카카오 내부 오버레이 레이어 구조와 z-index 경합 없이 항상 폴리곤 위에 뜨는 게 보장됨)
-  var infoPopupEl = document.getElementById('infoPopup');
-  var savedMarkersLayer = document.getElementById('savedMarkersLayer');
+  // ===== 정보창(말풍선) — 카카오 기본 InfoWindow 대신 커스텀 오버레이로 직접 구현 =====
   var infowindow = {
-    _pos: null,
-    _visible: false,
+    overlay: null,
+    _ensure: function() {
+      if (!this.overlay) {
+        this.overlay = new kakao.maps.CustomOverlay({ content: '', yAnchor: 1, zIndex: 3, clickable: true });
+      }
+    },
     setContent: function(html) {
-      infoPopupEl.innerHTML = html;
+      this._ensure();
+      this.overlay.setContent(html);
     },
     setPosition: function(pos) {
-      this._pos = pos;
-      this._reposition();
+      this._ensure();
+      this.overlay.setPosition(pos);
     },
     open: function(map, marker) {
-      if (marker) this._pos = marker.getPosition();
-      this._visible = true;
-      infoPopupEl.style.display = 'block';
-      this._reposition();
+      this._ensure();
+      if (marker) this.overlay.setPosition(marker.getPosition());
+      this.overlay.setMap(map);
     },
     close: function() {
-      this._visible = false;
-      infoPopupEl.style.display = 'none';
-    },
-    _reposition: function() {
-      if (!this._visible || !this._pos) return;
-      var proj = map.getProjection();
-      var pt = proj.containerPointFromCoords(this._pos);
-      infoPopupEl.style.left = pt.x + 'px';
-      infoPopupEl.style.top = pt.y + 'px';
-      infoPopupEl.style.transform = 'translate(-50%, calc(-100% - 10px))';
+      if (this.overlay) this.overlay.setMap(null);
     }
   };
   // ===== 정보창 끝 =====
@@ -966,26 +941,6 @@
     '1': '#e6f5f9'
   };
 
-  // 영급 문자열("9영급" 등)에서 숫자만 추출
-  function parseAgeGrade(agclsStr) {
-    var m = String(agclsStr || '').match(/(\d+)/);
-    return m ? parseInt(m[1], 10) : 0;
-  }
-
-  // 영급+경급 조합을 5단계 진하기 중 하나(9/7/5/3/1, 숫자가 클수록 진함)로 매핑
-  // 7~9영급+대경목(가장 진함) > 7~9영급+소중경목 > 4~6영급+대경목 > 4~6영급+소중경목 > 1~3영급 전체(가장 연함)
-  function shadeKeyForGradeCombo(agclsStr, dmclsStr) {
-    var age = parseAgeGrade(agclsStr);
-    var isLarge = String(dmclsStr || '').indexOf('대경목') !== -1;
-    if (age >= 7) {
-      return isLarge ? '9' : '7';
-    } else if (age >= 4) {
-      return isLarge ? '5' : '3';
-    } else {
-      return '1';
-    }
-  }
-
   function colorByGrade(props) {
     var species = String(props.KOFTR_NM || '');
     var palette;
@@ -996,16 +951,11 @@
     } else {
       palette = GRADE_COLORS;
     }
-    var shadeKey = shadeKeyForGradeCombo(props.AGCLS_NM || props.AGCLS_CD, props.DMCLS_NM);
-    return palette[shadeKey];
-  }
-
-  function hexToRgba(hex, alpha) {
-    var h = hex.replace('#', '');
-    var r = parseInt(h.substring(0, 2), 16);
-    var g = parseInt(h.substring(2, 4), 16);
-    var b = parseInt(h.substring(4, 6), 16);
-    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
+    for (var g = 9; g >= 1; g--) {
+      if (grade.includes(String(g))) return palette[String(g)];
+    }
+    return palette['1'];
   }
 
   function getBbox(coordsList) {
@@ -1027,6 +977,13 @@
     var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
     return !(bbox.maxLng < sw.getLng() || bbox.minLng > ne.getLng() ||
               bbox.maxLat < sw.getLat() || bbox.minLat > ne.getLat());
+  }
+
+  var currentPolygons = [];
+
+  function clearCurrentPolygons() {
+    currentPolygons.forEach(function(p) { p.setMap(null); });
+    currentPolygons = [];
   }
 
   var showPolygons = true;
@@ -1085,98 +1042,48 @@
       });
   }
 
-  // ===== 점-다각형 판정 =====
-  function pointInRing(lng, lat, ring) {
-    var inside = false;
-    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      var xi = ring[i][0], yi = ring[i][1];
-      var xj = ring[j][0], yj = ring[j][1];
-      var intersect = ((yi > lat) !== (yj > lat)) &&
-        (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  function featureContainsPoint(f, lng, lat) {
-    for (var p = 0; p < f.coordsList.length; p++) {
-      var rings = f.coordsList[p];
-      if (!rings || !rings[0]) continue;
-      if (pointInRing(lng, lat, rings[0])) {
-        var inHole = false;
-        for (var h = 1; h < rings.length; h++) {
-          if (pointInRing(lng, lat, rings[h])) { inHole = true; break; }
-        }
-        if (!inHole) return true;
-      }
-    }
-    return false;
-  }
-  // ===== 점-다각형 판정 끝 =====
-
-  // ===== 폴리곤 캔버스 렌더링(같은 색은 하나로 합쳐 한 번만 칠해서 경계 이중채색 방지) =====
-  var polyCanvas = document.getElementById('polyCanvas');
-  var polyCtx = polyCanvas.getContext('2d');
-  var visibleFeaturesForClick = [];
-
   function renderVisiblePolygons() {
-    var dpr = window.devicePixelRatio || 1;
-    var cw = mapContainer.clientWidth;
-    var ch = mapContainer.clientHeight;
-    var wantW = Math.round(cw * dpr), wantH = Math.round(ch * dpr);
-    if (polyCanvas.width !== wantW || polyCanvas.height !== wantH) {
-      polyCanvas.width = wantW;
-      polyCanvas.height = wantH;
-    }
-    polyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    polyCtx.clearRect(0, 0, cw, ch);
-
-    visibleFeaturesForClick = [];
-
+    clearCurrentPolygons();
     if (!showPolygons) return;
+
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) return;
     if (allFeatures.length === 0) return;
 
     var bounds = map.getBounds();
-    var proj = map.getProjection();
     var drawn = 0;
-    var groups = {};
 
     for (var i = 0; i < allFeatures.length; i++) {
       if (drawn >= MAX_POLYGONS_ON_SCREEN) break;
-      var f = allFeatures[i];
+      let f = allFeatures[i];
       if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
-
-      var color = colorByGrade(f.properties);
-      if (!groups[color]) groups[color] = new Path2D();
 
       f.coordsList.forEach(function(polyCoords) {
         if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
-        var ring = polyCoords[0];
-        var pt0 = proj.containerPointFromCoords(new kakao.maps.LatLng(ring[0][1], ring[0][0]));
-        groups[color].moveTo(pt0.x, pt0.y);
-        for (var k = 1; k < ring.length; k++) {
-          var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(ring[k][1], ring[k][0]));
-          groups[color].lineTo(pt.x, pt.y);
-        }
-        groups[color].closePath();
-      });
+        var path = polyCoords[0].map(c => new kakao.maps.LatLng(c[1], c[0]));
+        var polygon = new kakao.maps.Polygon({
+          map: map,
+          path: path,
+          strokeWeight: 1,
+          strokeColor: '#4b1575',
+          strokeOpacity: 0.8,
+          fillColor: colorByGrade(f.properties),
+          fillOpacity: 0.55
+        });
+        currentPolygons.push(polygon);
 
-      visibleFeaturesForClick.push(f);
+        kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
+          suppressNextMapClick = true;
+          var p = f.properties;
+          var lat = mouseEvent.latLng.getLat();
+          var lng = mouseEvent.latLng.getLng();
+          infowindow.setPosition(mouseEvent.latLng);
+          infowindow.open(map);
+          requestElevation(p, lat, lng);
+        });
+      });
       drawn++;
     }
-
-    Object.keys(groups).forEach(function(color) {
-      polyCtx.fillStyle = hexToRgba(color, 0.55);
-      polyCtx.fill(groups[color], 'nonzero');
-    });
-    polyCtx.strokeStyle = 'rgba(75,21,117,0.8)';
-    polyCtx.lineWidth = 1;
-    Object.keys(groups).forEach(function(color) {
-      polyCtx.stroke(groups[color]);
-    });
   }
-  // ===== 폴리곤 캔버스 렌더링 끝 =====
 
   kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
     if (roadviewModeActive) {
@@ -1184,45 +1091,9 @@
       return;
     }
     if (suppressNextMapClick) { suppressNextMapClick = false; return; }
-
-    var lat = mouseEvent.latLng.getLat();
-    var lng = mouseEvent.latLng.getLng();
-    var matched = null;
-    for (var i = 0; i < visibleFeaturesForClick.length; i++) {
-      if (featureContainsPoint(visibleFeaturesForClick[i], lng, lat)) {
-        matched = visibleFeaturesForClick[i];
-        break;
-      }
-    }
-    if (matched) {
-      infowindow.setPosition(mouseEvent.latLng);
-      infowindow.open(map);
-      requestElevation(matched.properties, lat, lng);
-      return;
-    }
-
     infowindow.close();
     searchMarkers.forEach(function(m) { m.setMap(null); });
     searchMarkers = [];
-  });
-
-  // 줌 애니메이션(카카오 지도 자체의 부드러운 확대/축소 전환)은 우리가 그리는
-  // 폴리곤/정보창/저장마커 레이어와 완벽히 동기화할 방법이 없어서, 그 도중에 다시 그리면
-  // 위치가 어긋나 보이는 문제가 있었음. 완벽한 동기화 대신, 줌 도중엔 이 레이어들을
-  // 부드럽게 페이드아웃했다가, 줌이 완전히 끝난 뒤 새 위치로 그려놓고 다시 페이드인함.
-  var zoomTransitioning = false;
-
-  kakao.maps.event.addListener(map, 'center_changed', function() {
-    if (zoomTransitioning) return;
-    renderVisiblePolygons();
-    infowindow._reposition();
-    repositionSavedMarkers();
-  });
-  kakao.maps.event.addListener(map, 'zoom_changed', function() {
-    zoomTransitioning = true;
-    polyCanvas.style.opacity = '0';
-    infoPopupEl.style.opacity = '0';
-    savedMarkersLayer.style.opacity = '0';
   });
 
   var myLocationMarker = null;
@@ -1424,21 +1295,10 @@
   }
 
   function onMapIdle() {
-    zoomTransitioning = false;
-
-    function finishAndFadeIn() {
-      infowindow._reposition();
-      repositionSavedMarkers();
-      polyCanvas.style.opacity = '1';
-      infoPopupEl.style.opacity = '1';
-      savedMarkersLayer.style.opacity = '1';
-    }
-
-    if (!tileManifest) { finishAndFadeIn(); return; }
+    if (!tileManifest) return;
 
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) {
       renderVisiblePolygons();
-      finishAndFadeIn();
       return;
     }
 
@@ -1449,7 +1309,6 @@
     });
 
     renderVisiblePolygons();
-    finishAndFadeIn();
 
     if (toFetch.length > 0) {
       Promise.all(toFetch.map(fetchTile)).then(function() {
@@ -1530,47 +1389,27 @@
     try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
   }
 
-  // 저장 장소 마커도 카카오 기본 Marker 대신, 정보창과 같은 방식(좌표->화면픽셀 직접계산)으로
-  // 그리는 순수 img 태그로 구현 — 카카오 마커가 캔버스 뒤로 가려지는 것과 같은 문제라서
-  // 이미 검증된 같은 방법으로 근본 해결
   function renderSavedPlaces() {
-    savedMarkersLayer.innerHTML = '';
+    savedPlaceMarkers.forEach(function(m) { m.setMap(null); });
     savedPlaceMarkers = [];
     savedPlaces.forEach(function(place, idx) {
-      var img = document.createElement('img');
-      img.src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(
-        place.icon === 'circle' ? CIRCLE_MARKER_SVG : STAR_MARKER_SVG
-      );
-      img.style.position = 'absolute';
-      img.style.width = (place.icon === 'circle' ? '26px' : '30px');
-      img.style.transform = 'translate(-50%, -50%)';
-      img.style.pointerEvents = 'auto';
-      img.style.cursor = 'pointer';
-      img.addEventListener('click', function(e) {
-        e.stopPropagation();
+      var marker = new kakao.maps.Marker({
+        map: map,
+        position: new kakao.maps.LatLng(place.lat, place.lng),
+        image: buildSavedPlaceMarkerImage(place.icon)
+      });
+      kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
-        showSavedPlaceInfo(place, idx, '조회 중...');
+        showSavedPlaceInfo(marker, place, idx, '조회 중...');
         getShortAddress(place.lat, place.lng, function(addr) {
-          showSavedPlaceInfo(place, idx, addr || '정보 없음');
+          showSavedPlaceInfo(marker, place, idx, addr || '정보 없음');
         });
       });
-      savedMarkersLayer.appendChild(img);
-      savedPlaceMarkers.push({ el: img, place: place });
-    });
-    repositionSavedMarkers();
-  }
-
-  function repositionSavedMarkers() {
-    if (savedPlaceMarkers.length === 0) return;
-    var proj = map.getProjection();
-    savedPlaceMarkers.forEach(function(item) {
-      var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(item.place.lat, item.place.lng));
-      item.el.style.left = pt.x + 'px';
-      item.el.style.top = pt.y + 'px';
+      savedPlaceMarkers.push(marker);
     });
   }
 
-  function showSavedPlaceInfo(place, idx, addrText) {
+  function showSavedPlaceInfo(marker, place, idx, addrText) {
     var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     var memoLine = place.memo ? ('<br><span style="font-size:12px;">' + escapeHtml(place.memo) + '</span>') : '';
     infowindow.setContent(
@@ -1580,7 +1419,7 @@
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
       ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
     );
-    infowindow.setPosition(new kakao.maps.LatLng(place.lat, place.lng));
+    infowindow.setPosition(marker.getPosition());
     infowindow.open(map);
     setTimeout(function() {
       var editLink = document.getElementById('editSavedPlaceLink');
