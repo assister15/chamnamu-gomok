@@ -1203,9 +1203,13 @@
     renderVisiblePolygons();
     infowindow._reposition();
   });
+  // 줌 애니메이션 도중에는 지도와 폴리곤의 이동 속도가 서로 달라서
+  // "폴리곤이 떴다가 제자리로 돌아오는" 것처럼 보이는 문제가 있었음.
+  // 그래서 줌 중에는 폴리곤을 잠깐 지워두고, 줌이 완전히 끝난 뒤(idle)에만 다시 그림.
   kakao.maps.event.addListener(map, 'zoom_changed', function() {
-    renderVisiblePolygons();
-    infowindow._reposition();
+    var cw = mapContainer.clientWidth, ch = mapContainer.clientHeight;
+    polyCtx.clearRect(0, 0, cw, ch);
+    infowindow.close();
   });
 
   var myLocationMarker = null;
