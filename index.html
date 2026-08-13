@@ -13,6 +13,9 @@
     position:fixed; top:0; left:0; width:100%; height:calc(var(--vh, 1vh) * 100);
     z-index:1; pointer-events:none;
   }
+  #infoPopup {
+    position:fixed; top:0; left:0; z-index:5; display:none; pointer-events:auto;
+  }
 
   #splashScreen {
     position:fixed; top:0; left:0; width:100%; height:100%;
@@ -327,6 +330,7 @@
 
 <div id="map"></div>
 <canvas id="polyCanvas"></canvas>
+<div id="infoPopup"></div>
 <div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
 <button id="roadviewBtn" title="로드뷰 모드">🚶</button>
@@ -421,29 +425,37 @@
   var geocoder = new kakao.maps.services.Geocoder();
   var searchMarkers = [];
 
-  // ===== 정보창(말풍선) — 카카오 기본 InfoWindow 대신 커스텀 오버레이로 직접 구현 =====
+  // ===== 정보창(말풍선) — 카카오 CustomOverlay 대신 우리가 직접 위치를 계산해서 그리는 순수 div로 구현 =====
+  // (캔버스 폴리곤 레이어와 마찬가지로 이 div도 우리가 z-index를 직접 통제하는 요소라서,
+  //  카카오 내부 오버레이 레이어 구조와 z-index 경합 없이 항상 폴리곤 위에 뜨는 게 보장됨)
+  var infoPopupEl = document.getElementById('infoPopup');
   var infowindow = {
-    overlay: null,
-    _ensure: function() {
-      if (!this.overlay) {
-        this.overlay = new kakao.maps.CustomOverlay({ content: '', yAnchor: 1, zIndex: 3, clickable: true });
-      }
-    },
+    _pos: null,
+    _visible: false,
     setContent: function(html) {
-      this._ensure();
-      this.overlay.setContent(html);
+      infoPopupEl.innerHTML = html;
     },
     setPosition: function(pos) {
-      this._ensure();
-      this.overlay.setPosition(pos);
+      this._pos = pos;
+      this._reposition();
     },
     open: function(map, marker) {
-      this._ensure();
-      if (marker) this.overlay.setPosition(marker.getPosition());
-      this.overlay.setMap(map);
+      if (marker) this._pos = marker.getPosition();
+      this._visible = true;
+      infoPopupEl.style.display = 'block';
+      this._reposition();
     },
     close: function() {
-      if (this.overlay) this.overlay.setMap(null);
+      this._visible = false;
+      infoPopupEl.style.display = 'none';
+    },
+    _reposition: function() {
+      if (!this._visible || !this._pos) return;
+      var proj = map.getProjection();
+      var pt = proj.containerPointFromCoords(this._pos);
+      infoPopupEl.style.left = pt.x + 'px';
+      infoPopupEl.style.top = pt.y + 'px';
+      infoPopupEl.style.transform = 'translate(-50%, calc(-100% - 10px))';
     }
   };
   // ===== 정보창 끝 =====
@@ -1187,8 +1199,14 @@
     searchMarkers = [];
   });
 
-  kakao.maps.event.addListener(map, 'center_changed', renderVisiblePolygons);
-  kakao.maps.event.addListener(map, 'zoom_changed', renderVisiblePolygons);
+  kakao.maps.event.addListener(map, 'center_changed', function() {
+    renderVisiblePolygons();
+    infowindow._reposition();
+  });
+  kakao.maps.event.addListener(map, 'zoom_changed', function() {
+    renderVisiblePolygons();
+    infowindow._reposition();
+  });
 
   var myLocationMarker = null;
 
