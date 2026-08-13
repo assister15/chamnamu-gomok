@@ -9,6 +9,10 @@
 <style>
   html, body { margin:0; padding:0; height:100%; height:calc(var(--vh, 1vh) * 100); font-family:'Malgun Gothic', sans-serif; overflow:hidden; }
   #map { width:100%; height:100%; }
+  #polyCanvas {
+    position:fixed; top:0; left:0; width:100%; height:calc(var(--vh, 1vh) * 100);
+    z-index:1; pointer-events:none;
+  }
 
   #splashScreen {
     position:fixed; top:0; left:0; width:100%; height:100%;
@@ -322,6 +326,7 @@
 </div>
 
 <div id="map"></div>
+<canvas id="polyCanvas"></canvas>
 <div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
 <button id="roadviewBtn" title="로드뷰 모드">🚶</button>
@@ -354,6 +359,7 @@
       var center = map.getCenter();
       map.relayout();
       map.setCenter(center);
+      if (typeof renderVisiblePolygons === 'function') renderVisiblePolygons();
     }
   }
   setRealViewportHeight();
@@ -585,7 +591,6 @@
     }
   }
 
-  // 방향(나침반) 화살표가 있는 사용자 위치 마커 이미지 생성
   function buildUserMarkerImage(angle) {
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">' +
       '<g transform="rotate(' + angle + ' 15 15)">' +
@@ -959,6 +964,14 @@
     return palette['1'];
   }
 
+  function hexToRgba(hex, alpha) {
+    var h = hex.replace('#', '');
+    var r = parseInt(h.substring(0, 2), 16);
+    var g = parseInt(h.substring(2, 4), 16);
+    var b = parseInt(h.substring(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
   function getBbox(coordsList) {
     var minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
     coordsList.forEach(function(polyCoords) {
@@ -978,13 +991,6 @@
     var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
     return !(bbox.maxLng < sw.getLng() || bbox.minLng > ne.getLng() ||
               bbox.maxLat < sw.getLat() || bbox.minLat > ne.getLat());
-  }
-
-  var currentPolygons = [];
-
-  function clearCurrentPolygons() {
-    currentPolygons.forEach(function(p) { p.setMap(null); });
-    currentPolygons = [];
   }
 
   var showPolygons = true;
@@ -1043,48 +1049,98 @@
       });
   }
 
-  function renderVisiblePolygons() {
-    clearCurrentPolygons();
-    if (!showPolygons) return;
+  // ===== 점-다각형 판정 =====
+  function pointInRing(lng, lat, ring) {
+    var inside = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0], yi = ring[i][1];
+      var xj = ring[j][0], yj = ring[j][1];
+      var intersect = ((yi > lat) !== (yj > lat)) &&
+        (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
 
+  function featureContainsPoint(f, lng, lat) {
+    for (var p = 0; p < f.coordsList.length; p++) {
+      var rings = f.coordsList[p];
+      if (!rings || !rings[0]) continue;
+      if (pointInRing(lng, lat, rings[0])) {
+        var inHole = false;
+        for (var h = 1; h < rings.length; h++) {
+          if (pointInRing(lng, lat, rings[h])) { inHole = true; break; }
+        }
+        if (!inHole) return true;
+      }
+    }
+    return false;
+  }
+  // ===== 점-다각형 판정 끝 =====
+
+  // ===== 폴리곤 캔버스 렌더링(같은 색은 하나로 합쳐 한 번만 칠해서 경계 이중채색 방지) =====
+  var polyCanvas = document.getElementById('polyCanvas');
+  var polyCtx = polyCanvas.getContext('2d');
+  var visibleFeaturesForClick = [];
+
+  function renderVisiblePolygons() {
+    var dpr = window.devicePixelRatio || 1;
+    var cw = mapContainer.clientWidth;
+    var ch = mapContainer.clientHeight;
+    var wantW = Math.round(cw * dpr), wantH = Math.round(ch * dpr);
+    if (polyCanvas.width !== wantW || polyCanvas.height !== wantH) {
+      polyCanvas.width = wantW;
+      polyCanvas.height = wantH;
+    }
+    polyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    polyCtx.clearRect(0, 0, cw, ch);
+
+    visibleFeaturesForClick = [];
+
+    if (!showPolygons) return;
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) return;
     if (allFeatures.length === 0) return;
 
     var bounds = map.getBounds();
+    var proj = map.getProjection();
     var drawn = 0;
+    var groups = {};
 
     for (var i = 0; i < allFeatures.length; i++) {
       if (drawn >= MAX_POLYGONS_ON_SCREEN) break;
-      let f = allFeatures[i];
+      var f = allFeatures[i];
       if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
+
+      var color = colorByGrade(f.properties);
+      if (!groups[color]) groups[color] = new Path2D();
 
       f.coordsList.forEach(function(polyCoords) {
         if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
-        var path = polyCoords[0].map(c => new kakao.maps.LatLng(c[1], c[0]));
-        var polygon = new kakao.maps.Polygon({
-          map: map,
-          path: path,
-          strokeWeight: 1,
-          strokeColor: '#4b1575',
-          strokeOpacity: 0.8,
-          fillColor: colorByGrade(f.properties),
-          fillOpacity: 0.55
-        });
-        currentPolygons.push(polygon);
-
-        kakao.maps.event.addListener(polygon, 'click', function(mouseEvent) {
-          suppressNextMapClick = true;
-          var p = f.properties;
-          var lat = mouseEvent.latLng.getLat();
-          var lng = mouseEvent.latLng.getLng();
-          infowindow.setPosition(mouseEvent.latLng);
-          infowindow.open(map);
-          requestElevation(p, lat, lng);
-        });
+        var ring = polyCoords[0];
+        var pt0 = proj.containerPointFromCoords(new kakao.maps.LatLng(ring[0][1], ring[0][0]));
+        groups[color].moveTo(pt0.x, pt0.y);
+        for (var k = 1; k < ring.length; k++) {
+          var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(ring[k][1], ring[k][0]));
+          groups[color].lineTo(pt.x, pt.y);
+        }
+        groups[color].closePath();
       });
+
+      visibleFeaturesForClick.push(f);
       drawn++;
     }
+
+    Object.keys(groups).forEach(function(color) {
+      polyCtx.fillStyle = hexToRgba(color, 0.55);
+      polyCtx.fill(groups[color], 'nonzero');
+    });
+    polyCtx.strokeStyle = 'rgba(75,21,117,0.8)';
+    polyCtx.lineWidth = 1;
+    Object.keys(groups).forEach(function(color) {
+      polyCtx.stroke(groups[color]);
+    });
   }
+  // ===== 폴리곤 캔버스 렌더링 끝 =====
 
   kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
     if (roadviewModeActive) {
@@ -1092,10 +1148,30 @@
       return;
     }
     if (suppressNextMapClick) { suppressNextMapClick = false; return; }
+
+    var lat = mouseEvent.latLng.getLat();
+    var lng = mouseEvent.latLng.getLng();
+    var matched = null;
+    for (var i = 0; i < visibleFeaturesForClick.length; i++) {
+      if (featureContainsPoint(visibleFeaturesForClick[i], lng, lat)) {
+        matched = visibleFeaturesForClick[i];
+        break;
+      }
+    }
+    if (matched) {
+      infowindow.setPosition(mouseEvent.latLng);
+      infowindow.open(map);
+      requestElevation(matched.properties, lat, lng);
+      return;
+    }
+
     infowindow.close();
     searchMarkers.forEach(function(m) { m.setMap(null); });
     searchMarkers = [];
   });
+
+  kakao.maps.event.addListener(map, 'center_changed', renderVisiblePolygons);
+  kakao.maps.event.addListener(map, 'zoom_changed', renderVisiblePolygons);
 
   var myLocationMarker = null;
 
