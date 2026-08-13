@@ -435,7 +435,7 @@
       if (r.address) {
         var a = r.address;
         var dong = a.region_3depth_name || '';
-        var jibun = a.main_address_no || '';
+        var jibun = (a.mountain_yn === 'Y' ? '산' : '') + (a.main_address_no || '');
         if (a.sub_address_no && a.sub_address_no !== '0') {
           jibun += '-' + a.sub_address_no;
         }
@@ -990,7 +990,7 @@
   function buildInfoContent(p, elevText, showRetry) {
     return '<div style="padding:6px;font-size:12px;">' +
       (p.KOFTR_NM || '수종 정보 없음') + ' / ' + (p.AGCLS_NM || p.AGCLS_CD || '') +
-      (p.DMCLS_NM ? (' / ' + p.DMCLS_NM) : '') +
+      (p.DMCLS_NM ? (' / ' + p.DMCLS_NM + '(추정)') : '') +
       (elevText ? '<br>' + elevText : '') +
       (showRetry ? ' <a href="#" id="elevRetryLink" style="color:#4b1575;text-decoration:underline;">다시 시도</a>' : '') +
       '</div>';
@@ -1513,7 +1513,7 @@
 
   var longPressTimer = null;
   var longPressStartPoint = null;
-  var LONG_PRESS_MS = 900;
+  var LONG_PRESS_MS = 1250;
   var LONG_PRESS_MOVE_TOLERANCE = 8;
 
   function handlePressStart(clientX, clientY) {
@@ -1539,7 +1539,10 @@
   }
 
   mapContainer.addEventListener('touchstart', function(e) {
-    if (e.touches.length !== 1) return;
+    if (e.touches.length > 1) {
+      handlePressEnd();
+      return;
+    }
     handlePressStart(e.touches[0].clientX, e.touches[0].clientY);
   });
   mapContainer.addEventListener('touchmove', function(e) {
