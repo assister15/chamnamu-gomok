@@ -108,6 +108,11 @@
     width:44px; height:44px; border-radius:50%; border:none;
     background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
     cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
+    /* 롱프레스 시 브라우저 기본 "복사/공유/모두선택" 팝업이 뜨는 것을 막음
+       (안 막으면 우리가 만든 세부설정 패널보다 이 브라우저 기본 메뉴가 먼저 뜸) */
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
   }
   #toggleLayerBtn.off { background:#ddd; opacity:0.6; }
   #toggleLayerBtn:active { background:#f0f0f0; }
@@ -1358,6 +1363,13 @@
         if (navigator.vibrate) navigator.vibrate(30);
         openGroupSettingsPanel();
       }, LONG_PRESS_MS);
+    });
+
+    // 안드로이드 브라우저는 CSS(-webkit-touch-callout 등)만으로는 롱프레스 시
+    // "복사/공유/모두선택" 메뉴를 못 막는 경우가 있어서, contextmenu 이벤트
+    // 자체를 이 버튼에서는 무조건 막음.
+    btn.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
     });
 
     btn.addEventListener('pointermove', function(e) {
