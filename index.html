@@ -1070,7 +1070,14 @@
 
       f.coordsList.forEach(function(polyCoords) {
         if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
-        var path = polyCoords[0].map(c => new kakao.maps.LatLng(c[1], c[0]));
+        // polyCoords[0]은 외곽선, polyCoords[1] 이후는 구멍(hole).
+        // 겹침 제거 과정에서 큰 배경 폴리곤 안에 작은 폴리곤 자리만큼 구멍이 뚫리는 경우가 있는데,
+        // 구멍 링을 무시하면 그 자리가 도로 꽉 찬 것처럼 그려져서 이중으로 겹쳐 보이는 문제가 생김.
+        // 그래서 모든 링(외곽선+구멍)을 다 kakao Polygon의 path에 전달해야 함.
+        var path = polyCoords
+          .filter(function(ring) { return ring && ring.length >= 3; })
+          .map(function(ring) { return ring.map(c => new kakao.maps.LatLng(c[1], c[0])); });
+        if (path.length === 0) return;
         var polygon = new kakao.maps.Polygon({
           map: map,
           path: path,
