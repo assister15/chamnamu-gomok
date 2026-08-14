@@ -112,6 +112,39 @@
   #toggleLayerBtn.off { background:#ddd; opacity:0.6; }
   #toggleLayerBtn:active { background:#f0f0f0; }
 
+  #groupSettingsOverlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    z-index: 998; display: none;
+  }
+  #groupSettingsOverlay.open { display: block; }
+  #groupSettingsPanel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 999;
+    background: #fff; border-radius: 16px 16px 0 0;
+    padding: 18px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -2px 16px rgba(0,0,0,0.25);
+    transform: translateY(100%);
+    transition: transform 0.25s ease-out;
+  }
+  #groupSettingsOverlay.open #groupSettingsPanel { transform: translateY(0); }
+  #groupSettingsPanel h3 { margin: 0 0 14px; font-size: 15px; color: #333; }
+  .groupOption {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 4px; font-size: 14px; color: #222;
+  }
+  .groupOption .swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
+  .groupOption input { width: 18px; height: 18px; }
+  #groupSettingsPanel .panelBtnRow {
+    display: flex; gap: 8px; margin-top: 14px;
+  }
+  #groupSettingsPanel .panelBtnRow button {
+    flex: 1; padding: 10px 0; border-radius: 8px; border: 1px solid #ddd;
+    background: #f7f7f7; font-size: 13px; color: #444;
+  }
+  #groupSettingsPanel .panelCloseBtn {
+    width: 100%; margin-top: 10px; padding: 11px 0; border-radius: 8px;
+    border: none; background: #4b1575; color: #fff; font-size: 14px; font-weight: 600;
+  }
+
   #trackToggleBtn {
     position:fixed; top:12px; right:12px; z-index:20;
     width:44px; height:44px; border-radius:50%; border:none;
@@ -326,7 +359,33 @@
 <button id="locateBtn" title="내 위치 찾기">📍</button>
 <button id="roadviewBtn" title="로드뷰 모드">🚶</button>
 <button id="satelliteBtn" title="위성지도 전환">🛰️</button>
-<button id="toggleLayerBtn" title="참나무 폴리곤 표시/숨김">🌳</button>
+<button id="toggleLayerBtn" title="참나무 폴리곤 표시/숨김 (길게 누르면 세부설정)">🌳</button>
+
+<div id="groupSettingsOverlay">
+  <div id="groupSettingsPanel">
+    <h3>수종별 표시 설정</h3>
+    <label class="groupOption">
+      <input type="checkbox" id="groupCheck_oak" checked>
+      <span class="swatch" style="background:#9e6ecf;"></span>
+      참나무류
+    </label>
+    <label class="groupOption">
+      <input type="checkbox" id="groupCheck_mixed" checked>
+      <span class="swatch" style="background:#ca9b72;"></span>
+      침활혼효림
+    </label>
+    <label class="groupOption">
+      <input type="checkbox" id="groupCheck_other" checked>
+      <span class="swatch" style="background:#69b9d3;"></span>
+      기타활엽수·오리나무
+    </label>
+    <div class="panelBtnRow">
+      <button id="groupSelectAllBtn">전체 선택</button>
+      <button id="groupSelectNoneBtn">전체 해제</button>
+    </div>
+    <button class="panelCloseBtn" id="groupPanelCloseBtn">닫기</button>
+  </div>
+</div>
 
 <div id="roadviewPanel">
   <button id="roadviewCloseBtn">✕</button>
@@ -956,16 +1015,18 @@
     return isLarge ? '5' : '4'; // ageGroup === 'high'
   }
 
-  function colorByGrade(props) {
+  function paletteGroupOf(props) {
     var species = String(props.KOFTR_NM || '');
-    var palette;
-    if (species.includes('침활혼효림')) {
-      palette = MIXED_FOREST_COLORS;
-    } else if (species.includes('기타활엽수') || species.includes('오리나무')) {
-      palette = OTHER_BROADLEAF_COLORS;
-    } else {
-      palette = GRADE_COLORS;
-    }
+    if (species.includes('침활혼효림')) return 'mixed';
+    if (species.includes('기타활엽수') || species.includes('오리나무')) return 'other';
+    return 'oak';
+  }
+
+  function colorByGrade(props) {
+    var group = paletteGroupOf(props);
+    var palette = group === 'mixed' ? MIXED_FOREST_COLORS
+                : group === 'other' ? OTHER_BROADLEAF_COLORS
+                : GRADE_COLORS;
     return palette[gradeLevel(props)];
   }
 
@@ -998,6 +1059,26 @@
   }
 
   var showPolygons = true;
+
+  // 수종 계열별 세부 표시 설정 (롱프레스로 여는 세부설정 패널에서 조작).
+  // 브라우저에 저장해서 다음 방문 때도 마지막 설정이 유지되도록 함.
+  var groupVisibility = { oak: true, mixed: true, other: true };
+  (function loadGroupVisibility() {
+    try {
+      var saved = localStorage.getItem('groupVisibility');
+      if (saved) {
+        var parsed = JSON.parse(saved);
+        ['oak', 'mixed', 'other'].forEach(function(k) {
+          if (typeof parsed[k] === 'boolean') groupVisibility[k] = parsed[k];
+        });
+      }
+    } catch (e) { /* 저장된 값이 없거나 손상됐으면 기본값(전부 true) 사용 */ }
+  })();
+  function saveGroupVisibility() {
+    try {
+      localStorage.setItem('groupVisibility', JSON.stringify(groupVisibility));
+    } catch (e) { /* 저장 실패해도 이번 세션 동작에는 지장 없음 */ }
+  }
 
   function fetchElevation(lat, lng) {
     return fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
@@ -1078,6 +1159,7 @@
       if (drawn >= MAX_POLYGONS_ON_SCREEN) break;
       let f = allFeatures[i];
       if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
+      if (!groupVisibility[paletteGroupOf(f.properties)]) continue;
 
       f.coordsList.forEach(function(polyCoords) {
         if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
@@ -1246,7 +1328,100 @@
     btn.classList.toggle('off', !showPolygons);
     renderVisiblePolygons();
   }
-  document.getElementById('toggleLayerBtn').addEventListener('click', togglePolygonLayer);
+
+  // 롱프레스(900ms)로 세부설정 패널 열기. 짧은 클릭은 기존처럼 전체 on/off.
+  // 900ms로 좀 길게 잡은 이유: 지도 위 버튼이다보니 짧게 하면 실수로
+  // 세부설정이 열리기 쉬워서, 확실히 "누르고 있었다"는 느낌이 들 때만 열리게 함.
+  (function setupToggleLongPress() {
+    var btn = document.getElementById('toggleLayerBtn');
+    var LONG_PRESS_MS = 900;
+    var MOVE_CANCEL_PX = 10;
+    var pressTimer = null;
+    var startX = 0, startY = 0;
+    var longPressFired = false;
+
+    function clearPressTimer() {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    }
+
+    btn.addEventListener('pointerdown', function(e) {
+      longPressFired = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      clearPressTimer();
+      pressTimer = setTimeout(function() {
+        longPressFired = true;
+        pressTimer = null;
+        if (navigator.vibrate) navigator.vibrate(30);
+        openGroupSettingsPanel();
+      }, LONG_PRESS_MS);
+    });
+
+    btn.addEventListener('pointermove', function(e) {
+      if (!pressTimer) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
+        clearPressTimer();
+      }
+    });
+
+    btn.addEventListener('pointerup', clearPressTimer);
+    btn.addEventListener('pointercancel', clearPressTimer);
+    btn.addEventListener('pointerleave', clearPressTimer);
+
+    btn.addEventListener('click', function(e) {
+      if (longPressFired) {
+        // 롱프레스로 세부설정이 이미 열렸으면, 뒤이어 발생하는 click(전체 on/off)은 무시
+        longPressFired = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      togglePolygonLayer();
+    });
+  })();
+
+  function openGroupSettingsPanel() {
+    document.getElementById('groupSettingsOverlay').classList.add('open');
+  }
+  function closeGroupSettingsPanel() {
+    document.getElementById('groupSettingsOverlay').classList.remove('open');
+  }
+
+  ['oak', 'mixed', 'other'].forEach(function(key) {
+    var cb = document.getElementById('groupCheck_' + key);
+    cb.checked = groupVisibility[key];
+    cb.addEventListener('change', function() {
+      groupVisibility[key] = cb.checked;
+      saveGroupVisibility();
+      renderVisiblePolygons();
+    });
+  });
+
+  document.getElementById('groupSelectAllBtn').addEventListener('click', function() {
+    ['oak', 'mixed', 'other'].forEach(function(key) {
+      groupVisibility[key] = true;
+      document.getElementById('groupCheck_' + key).checked = true;
+    });
+    saveGroupVisibility();
+    renderVisiblePolygons();
+  });
+  document.getElementById('groupSelectNoneBtn').addEventListener('click', function() {
+    ['oak', 'mixed', 'other'].forEach(function(key) {
+      groupVisibility[key] = false;
+      document.getElementById('groupCheck_' + key).checked = false;
+    });
+    saveGroupVisibility();
+    renderVisiblePolygons();
+  });
+  document.getElementById('groupPanelCloseBtn').addEventListener('click', closeGroupSettingsPanel);
+  document.getElementById('groupSettingsOverlay').addEventListener('click', function(e) {
+    if (e.target.id === 'groupSettingsOverlay') closeGroupSettingsPanel();
+  });
 
   // 타일 생성 방식상, 하나의 폴리곤이 여러 타일 경계에 걸쳐 있으면
   // 그 폴리곤 전체가 걸쳐있는 모든 타일에 통째로 중복 저장되어 있음.
