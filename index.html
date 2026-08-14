@@ -1241,6 +1241,7 @@
   var roadviewModeActive = false;
   var roadviewMinimap = null;
   var roadviewMinimapMarker = null;
+  var roadviewHistoryPushed = false;
 
   function toggleRoadviewMode() {
     var btn = document.getElementById('roadviewBtn');
@@ -1261,6 +1262,13 @@
         return;
       }
       document.getElementById('roadviewPanel').classList.add('active');
+      // 폰의 뒤로가기 버튼을 눌렀을 때 앱이 통째로 종료되지 않고
+      // 로드뷰 화면만 닫히게 하기 위해, 로드뷰를 열 때 히스토리를 하나 쌓아둠.
+      // (이미 로드뷰가 열려있는 상태에서 다른 지점을 또 누른 경우는 새로 안 쌓음)
+      if (!roadviewHistoryPushed) {
+        roadviewHistoryPushed = true;
+        history.pushState({ roadview: true }, '');
+      }
 
       var firstTime = !roadview;
       if (firstTime) {
@@ -1292,8 +1300,24 @@
     });
   }
 
-  document.getElementById('roadviewCloseBtn').addEventListener('click', function() {
+  function closeRoadviewPanel() {
     document.getElementById('roadviewPanel').classList.remove('active');
+  }
+
+  document.getElementById('roadviewCloseBtn').addEventListener('click', function() {
+    if (roadviewHistoryPushed) {
+      // popstate 핸들러가 실제 닫기를 처리하도록, 뒤로가기와 동일한 경로를 태움
+      history.back();
+    } else {
+      closeRoadviewPanel();
+    }
+  });
+
+  window.addEventListener('popstate', function() {
+    if (roadviewHistoryPushed) {
+      roadviewHistoryPushed = false;
+      closeRoadviewPanel();
+    }
   });
 
   var isSatelliteView = true;
