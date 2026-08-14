@@ -905,41 +905,56 @@
   var ZOOM_LEVEL_THRESHOLD = 8;
   var MAX_POLYGONS_ON_SCREEN = 4000;
 
+  // 5단계 색상 체계 (2026-08-14 개편)
+  // 2단계(4-6영급+소,중경목)를 기준 중간색으로 삼고, 1단계는 확 연하게,
+  // 3~5단계는 2단계 기준으로 점점 진하게.
+  // 1단계: 1-3영급(경급무관) / 2단계: 4-6영급+소,중경목(기준) / 3단계: 4-6영급+대경목
+  // 4단계: 7-9영급+소,중경목 / 5단계: 7-9영급+대경목
   var GRADE_COLORS = {
-    '9': '#2c0a43',
-    '8': '#4b1575',
-    '7': '#6823a4',
-    '6': '#8237cd',
-    '5': '#a071d6',
-    '4': '#cfc2e0',
-    '3': '#dcd4e7',
-    '2': '#e7e2ee',
-    '1': '#f2eff5'
+    '1': '#e6d9f2',
+    '2': '#9e6ecf',
+    '3': '#7f40bf',
+    '4': '#613091',
+    '5': '#422163'
   };
 
   var MIXED_FOREST_COLORS = {
-    '9': '#825935',
-    '8': '#9d6c40',
-    '7': '#b77f4e',
-    '6': '#c3946b',
-    '5': '#cda785',
-    '4': '#d7b89c',
-    '3': '#e0c9b4',
-    '2': '#eadacb',
-    '1': '#f3ebe3'
+    '1': '#f1e5da',
+    '2': '#ca9b72',
+    '3': '#b97c46',
+    '4': '#8d5e35',
+    '5': '#604024'
   };
 
   var OTHER_BROADLEAF_COLORS = {
-    '9': '#1b5d6d',
-    '8': '#247a8f',
-    '7': '#2c97b1',
-    '6': '#3db2cf',
-    '5': '#65c1d8',
-    '4': '#8bd1e2',
-    '3': '#aedfeb',
-    '2': '#cceaf2',
-    '1': '#e6f5f9'
+    '1': '#d7edf4',
+    '2': '#69b9d3',
+    '3': '#39a3c6',
+    '4': '#2c7c96',
+    '5': '#1e5567'
   };
+
+  function gradeLevel(props) {
+    var gradeStr = String(props.AGCLS_NM || props.AGCLS_CD || '');
+    var ageGroup = null; // 'low'(1-3) | 'mid'(4-6) | 'high'(7-9)
+    for (var g = 9; g >= 1; g--) {
+      if (gradeStr.includes(String(g))) {
+        if (g <= 3) ageGroup = 'low';
+        else if (g <= 6) ageGroup = 'mid';
+        else ageGroup = 'high';
+        break;
+      }
+    }
+    if (!ageGroup) return '1'; // 영급 정보 없으면 1단계로 처리
+
+    if (ageGroup === 'low') return '1';
+
+    var dmcls = String(props.DMCLS_NM || '');
+    var isLarge = dmcls.includes('대경목');
+
+    if (ageGroup === 'mid') return isLarge ? '3' : '2';
+    return isLarge ? '5' : '4'; // ageGroup === 'high'
+  }
 
   function colorByGrade(props) {
     var species = String(props.KOFTR_NM || '');
@@ -951,11 +966,7 @@
     } else {
       palette = GRADE_COLORS;
     }
-    var grade = String(props.AGCLS_NM || props.AGCLS_CD || '');
-    for (var g = 9; g >= 1; g--) {
-      if (grade.includes(String(g))) return palette[String(g)];
-    }
-    return palette['1'];
+    return palette[gradeLevel(props)];
   }
 
   function getBbox(coordsList) {
