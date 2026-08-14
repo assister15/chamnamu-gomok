@@ -1066,24 +1066,9 @@
   var showPolygons = true;
 
   // 수종 계열별 세부 표시 설정 (롱프레스로 여는 세부설정 패널에서 조작).
-  // 브라우저에 저장해서 다음 방문 때도 마지막 설정이 유지되도록 함.
+  // 앱을 껐다가 다시 켤 때는 항상 전부 표시된 기본 상태로 시작하도록 함
+  // (이전 방문 때 설정을 저장해서 불러오지 않음 — 의도적으로 매번 초기화).
   var groupVisibility = { oak: true, mixed: true, other: true };
-  (function loadGroupVisibility() {
-    try {
-      var saved = localStorage.getItem('groupVisibility');
-      if (saved) {
-        var parsed = JSON.parse(saved);
-        ['oak', 'mixed', 'other'].forEach(function(k) {
-          if (typeof parsed[k] === 'boolean') groupVisibility[k] = parsed[k];
-        });
-      }
-    } catch (e) { /* 저장된 값이 없거나 손상됐으면 기본값(전부 true) 사용 */ }
-  })();
-  function saveGroupVisibility() {
-    try {
-      localStorage.setItem('groupVisibility', JSON.stringify(groupVisibility));
-    } catch (e) { /* 저장 실패해도 이번 세션 동작에는 지장 없음 */ }
-  }
 
   function fetchElevation(lat, lng) {
     return fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
@@ -1409,7 +1394,6 @@
     cb.checked = groupVisibility[key];
     cb.addEventListener('change', function() {
       groupVisibility[key] = cb.checked;
-      saveGroupVisibility();
       renderVisiblePolygons();
     });
   });
@@ -1419,7 +1403,6 @@
       groupVisibility[key] = true;
       document.getElementById('groupCheck_' + key).checked = true;
     });
-    saveGroupVisibility();
     renderVisiblePolygons();
   });
   document.getElementById('groupSelectNoneBtn').addEventListener('click', function() {
@@ -1427,7 +1410,6 @@
       groupVisibility[key] = false;
       document.getElementById('groupCheck_' + key).checked = false;
     });
-    saveGroupVisibility();
     renderVisiblePolygons();
   });
   document.getElementById('groupPanelCloseBtn').addEventListener('click', closeGroupSettingsPanel);
