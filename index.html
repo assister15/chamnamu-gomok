@@ -1035,13 +1035,24 @@
       '</div>';
   }
 
+  // 경계가 딱 맞닿은 인접 폴리곤(구멍-바깥쪽 관계 등)에서는 클릭 한 번에
+  // 두 폴리곤의 click 이벤트가 동시에 발동할 수 있음. 그러면 고도 조회(비동기)가
+  // 두 번 시작되고, 나중에 응답이 도착하는 쪽이 말풍선을 덮어써서
+  // "처음엔 A였다가 고도 나오면 B로 바뀌는" 현상이 생김.
+  // 클릭마다 토큰을 발급해서, 그 사이 더 최근 클릭이 있었으면 이전 클릭의
+  // 비동기 결과는 무시하도록 함.
+  var latestClickToken = 0;
+
   function requestElevation(p, lat, lng) {
+    var myToken = ++latestClickToken;
     infowindow.setContent(buildInfoContent(p, '고도: 조회 중...', false));
     fetchElevation(lat, lng)
       .then(function(elevation) {
+        if (myToken !== latestClickToken) return;
         infowindow.setContent(buildInfoContent(p, '고도: 약 ' + Math.round(elevation) + 'm', false));
       })
       .catch(function() {
+        if (myToken !== latestClickToken) return;
         infowindow.setContent(buildInfoContent(p, '고도 조회 실패', true));
         var retryLink = document.getElementById('elevRetryLink');
         if (retryLink) {
