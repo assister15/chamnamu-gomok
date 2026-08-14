@@ -1219,11 +1219,25 @@
   }
   document.getElementById('toggleLayerBtn').addEventListener('click', togglePolygonLayer);
 
+  // 타일 생성 방식상, 하나의 폴리곤이 여러 타일 경계에 걸쳐 있으면
+  // 그 폴리곤 전체가 걸쳐있는 모든 타일에 통째로 중복 저장되어 있음.
+  // 이걸 그대로 다 그리면 같은 자리에 반투명 폴리곤이 여러 번 겹쳐 칠해져서
+  // 원래는 같은 색이어야 할 폴리곤이 더 진하게 보이는 문제가 있었음.
+  // 각 폴리곤에 고유 ID(_fid)가 붙어있으므로, 이미 로드된 _fid는 다시 추가하지 않음.
+  var loadedFeatureIds = new Set();
+
   function transformFeatures(features) {
     var out = [];
     var skipped = 0;
+    var duplicates = 0;
     features.forEach(function(feature) {
       try {
+        var fid = feature.properties ? feature.properties._fid : undefined;
+        if (fid !== undefined) {
+          if (loadedFeatureIds.has(fid)) { duplicates++; return; }
+          loadedFeatureIds.add(fid);
+        }
+
         if (!feature.geometry || !feature.geometry.coordinates ||
             feature.geometry.coordinates.length === 0) {
           skipped++; return;
@@ -1247,6 +1261,7 @@
       }
     });
     if (skipped > 0) console.log('스킵된(깨진) 폴리곤:', skipped);
+    if (duplicates > 0) console.log('중복(이미 다른 타일에서 로드됨) 폴리곤 스킵:', duplicates);
     return out;
   }
 
