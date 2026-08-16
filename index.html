@@ -567,9 +567,14 @@
       row.appendChild(nameDiv);
       row.appendChild(addrDiv);
       row.onclick = function() {
-        map.setCenter(new kakao.maps.LatLng(place.lat, place.lng));
-        map.setLevel(4);
+        // 검색결과 클릭과 동일한 이유(키보드 닫힘으로 인한 뷰포트 크기 변화)로
+        // relayout 후 센터를 잡음.
         closeSavedList();
+        setTimeout(function() {
+          map.relayout();
+          map.setCenter(new kakao.maps.LatLng(place.lat, place.lng));
+          map.setLevel(4);
+        }, 250);
       };
       itemsEl.appendChild(row);
 
@@ -954,9 +959,18 @@
       var row = document.createElement('div');
       row.textContent = item.title + ' (' + item.subtitle + ')';
       row.onclick = function() {
-        map.setCenter(pos);
-        map.setLevel(4);
+        // 검색창에 키보드가 떠 있던 상태라면, 결과를 누르는 순간 키보드가 닫히면서
+        // 화면(뷰포트) 크기가 바뀔 수 있음. 지도는 컨테이너 크기가 바뀐 걸 자동으로
+        // 감지 못 하므로 relayout() 없이 바로 setCenter()하면 "닫히기 전" 크기 기준으로
+        // 센터를 잡아버려서, 키보드가 닫힌 뒤엔 마커가 화면 가장자리/밖으로 밀려 보임.
+        // 키보드가 실제로 닫힐 시간을 살짝 준 다음 relayout으로 새 크기를 인식시키고 센터를 잡음.
+        document.getElementById('keyword').blur();
         collapsePanel();
+        setTimeout(function() {
+          map.relayout();
+          map.setCenter(pos);
+          map.setLevel(4);
+        }, 250);
       };
       listEl.appendChild(row);
     });
