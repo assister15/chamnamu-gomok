@@ -411,13 +411,39 @@
     setTimeout(function() { el.style.display = 'none'; }, 600);
   }
 
+  // 특정 장소로 이동할 때 목표 좌표를 여기 담아둠. 키보드가 닫히며 실제로
+  // 화면 크기가 바뀌는 시점(visualViewport resize)에 setRealViewportHeight가
+  // 이 값을 보고 정확히 그 좌표로 relayout+센터를 맞춤. 고정된 지연시간을
+  // 추측해서 기다리는 방식보다 정확함(기기/상황마다 키보드 닫히는 속도가 다름).
+  var pendingMapTarget = null;
+
+  function goToMapTarget(pos, level) {
+    pendingMapTarget = { pos: pos, level: level };
+    if (document.activeElement) document.activeElement.blur();
+    // 키보드가 애초에 안 열려있었던 경우(=resize 이벤트가 안 옴) 대비 안전장치
+    setTimeout(applyPendingMapTarget, 350);
+  }
+
+  function applyPendingMapTarget() {
+    if (!pendingMapTarget) return;
+    var target = pendingMapTarget;
+    pendingMapTarget = null;
+    map.relayout();
+    map.setCenter(target.pos);
+    if (target.level != null) map.setLevel(target.level);
+  }
+
   function setRealViewportHeight() {
     var vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.01;
     document.documentElement.style.setProperty('--vh', vh + 'px');
     if (typeof map !== 'undefined' && map) {
-      var center = map.getCenter();
-      map.relayout();
-      map.setCenter(center);
+      if (pendingMapTarget) {
+        applyPendingMapTarget();
+      } else {
+        var center = map.getCenter();
+        map.relayout();
+        map.setCenter(center);
+      }
     }
   }
   setRealViewportHeight();
@@ -567,14 +593,8 @@
       row.appendChild(nameDiv);
       row.appendChild(addrDiv);
       row.onclick = function() {
-        // 검색결과 클릭과 동일한 이유(키보드 닫힘으로 인한 뷰포트 크기 변화)로
-        // relayout 후 센터를 잡음.
         closeSavedList();
-        setTimeout(function() {
-          map.relayout();
-          map.setCenter(new kakao.maps.LatLng(place.lat, place.lng));
-          map.setLevel(4);
-        }, 250);
+        goToMapTarget(new kakao.maps.LatLng(place.lat, place.lng), 4);
       };
       itemsEl.appendChild(row);
 
@@ -953,24 +973,14 @@
           item.title + '</div>'
         );
         infowindow.open(map, marker);
-        map.setCenter(pos);
+        goToMapTarget(pos, null);
       });
 
       var row = document.createElement('div');
       row.textContent = item.title + ' (' + item.subtitle + ')';
       row.onclick = function() {
-        // 검색창에 키보드가 떠 있던 상태라면, 결과를 누르는 순간 키보드가 닫히면서
-        // 화면(뷰포트) 크기가 바뀔 수 있음. 지도는 컨테이너 크기가 바뀐 걸 자동으로
-        // 감지 못 하므로 relayout() 없이 바로 setCenter()하면 "닫히기 전" 크기 기준으로
-        // 센터를 잡아버려서, 키보드가 닫힌 뒤엔 마커가 화면 가장자리/밖으로 밀려 보임.
-        // 키보드가 실제로 닫힐 시간을 살짝 준 다음 relayout으로 새 크기를 인식시키고 센터를 잡음.
-        document.getElementById('keyword').blur();
         collapsePanel();
-        setTimeout(function() {
-          map.relayout();
-          map.setCenter(pos);
-          map.setLevel(4);
-        }, 250);
+        goToMapTarget(pos, 4);
       };
       listEl.appendChild(row);
     });
