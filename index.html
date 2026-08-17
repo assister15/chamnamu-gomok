@@ -1062,7 +1062,7 @@
     var bounds = new kakao.maps.LatLngBounds();
     results.forEach(function(item) {
       var pos = new kakao.maps.LatLng(item.y, item.x);
-      var marker = new kakao.maps.Marker({ map: map, position: pos });
+      var marker = new kakao.maps.Marker({ map: map, position: pos, clickable: true });
       searchMarkers.push(marker);
       bounds.extend(pos);
 
@@ -1764,7 +1764,8 @@
       var marker = new kakao.maps.Marker({
         map: map,
         position: new kakao.maps.LatLng(place.lat, place.lng),
-        image: buildSavedPlaceMarkerImage(place.icon)
+        image: buildSavedPlaceMarkerImage(place.icon),
+        clickable: true
       });
       kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
