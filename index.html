@@ -1067,7 +1067,7 @@
       bounds.extend(pos);
 
       kakao.maps.event.addListener(marker, 'click', function() {
-        suppressNextMapClick = true;
+        // 저장장소 마커와 동일한 이유로 suppressNextMapClick 불필요(clickable:true가 처리함)
         infowindow.setContent(
           '<div style="background:rgba(255,255,255,0.88);padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:13px;max-width:220px;">' +
           item.title + '</div>'
@@ -1768,7 +1768,9 @@
         clickable: true
       });
       kakao.maps.event.addListener(marker, 'click', function() {
-        suppressNextMapClick = true;
+        // clickable:true가 이미 "이 클릭이 지도로 전파되는 것"을 막아주므로
+        // suppressNextMapClick 플래그는 더 이상 필요 없음(오히려 소비가 안 돼서
+        // 남아있다가 바깥쪽 첫 탭을 무시시켜 "두 번 눌러야 닫힘" 버그의 원인이 됐음).
         var myToken = ++latestClickToken;
         showSavedPlaceInfo(marker, place, idx, '조회 중...', true);
         getShortAddress(place.lat, place.lng, function(addr) {
