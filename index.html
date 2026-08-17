@@ -1768,16 +1768,20 @@
       });
       kakao.maps.event.addListener(marker, 'click', function() {
         suppressNextMapClick = true;
-        showSavedPlaceInfo(marker, place, idx, '조회 중...');
+        var myToken = ++latestClickToken;
+        showSavedPlaceInfo(marker, place, idx, '조회 중...', true);
         getShortAddress(place.lat, place.lng, function(addr) {
-          showSavedPlaceInfo(marker, place, idx, addr || '정보 없음');
+          // 그 사이 사용자가 말풍선을 닫았거나 다른 걸 눌렀으면, 주소 조회가 늦게
+          // 끝나도 말풍선을 다시 열지 않음(이게 "두 번 눌러야 닫히던" 원인이었음).
+          if (myToken !== latestClickToken) return;
+          showSavedPlaceInfo(marker, place, idx, addr || '정보 없음', false);
         });
       });
       savedPlaceMarkers.push(marker);
     });
   }
 
-  function showSavedPlaceInfo(marker, place, idx, addrText) {
+  function showSavedPlaceInfo(marker, place, idx, addrText, shouldOpen) {
     var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     var memoLine = place.memo ? ('<br><span style="font-size:12px;">' + escapeHtml(place.memo) + '</span>') : '';
     infowindow.setContent(
@@ -1787,8 +1791,12 @@
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
       ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
     );
-    infowindow.setPosition(marker.getPosition());
-    infowindow.open(map);
+    // shouldOpen이 false인 경우(주소 조회가 끝나 내용만 갱신하는 경우)는
+    // open()을 다시 부르지 않음 — 이미 닫혀있던 말풍선이 되살아나는 걸 방지.
+    if (shouldOpen) {
+      infowindow.setPosition(marker.getPosition());
+      infowindow.open(map);
+    }
     setTimeout(function() {
       var editLink = document.getElementById('editSavedPlaceLink');
       if (editLink) {
