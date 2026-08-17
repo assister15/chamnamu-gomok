@@ -1786,7 +1786,8 @@
     var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     var memoLine = place.memo ? ('<br><span style="font-size:12px;">' + escapeHtml(place.memo) + '</span>') : '';
     infowindow.setContent(
-      '<div style="background:rgba(255,255,255,0.88);padding:8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
+      '<div style="position:relative;background:rgba(255,255,255,0.88);padding:8px 24px 8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
+      '<a href="#" id="closeSavedPlaceInfoLink" style="position:absolute;top:4px;right:6px;color:#888;text-decoration:none;font-size:14px;line-height:1;">✕</a>' +
       escapeHtml(place.name) + dateLine +
       '<br>주소: ' + escapeHtml(addrText) + memoLine +
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
@@ -1799,6 +1800,15 @@
       infowindow.open(map);
     }
     setTimeout(function() {
+      // 빈 곳을 눌러서 닫는 방식은 지도가 폴리곤으로 거의 덮여있어 안 먹힐 수 있으므로,
+      // 어디를 누르든 확실하게 한 번에 닫히는 ✕ 버튼을 직접 둠.
+      var closeLink = document.getElementById('closeSavedPlaceInfoLink');
+      if (closeLink) {
+        closeLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          infowindow.close();
+        });
+      }
       var editLink = document.getElementById('editSavedPlaceLink');
       if (editLink) {
         editLink.addEventListener('click', function(e) {
