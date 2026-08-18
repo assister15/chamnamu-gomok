@@ -138,6 +138,13 @@
   }
   .groupOption .swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
   .groupOption input { width: 18px; height: 18px; }
+  .levelOption { padding: 7px 4px; }
+  .levelOption .levelDesc { font-size: 12px; color: #888; }
+  .swatchLevel1 { background: #e6d9f2; }
+  .swatchLevel2 { background: #9e6ecf; }
+  .swatchLevel3 { background: #7f40bf; }
+  .swatchLevel4 { background: #613091; }
+  .swatchLevel5 { background: #422163; }
   #groupSettingsPanel .panelBtnRow {
     display: flex; gap: 8px; margin-top: 14px;
   }
@@ -198,12 +205,25 @@
   }
   .savedListItem {
     padding:8px 6px; border-bottom:1px solid #eee; cursor:pointer; font-size:14px;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
   }
   .savedListItem:last-child { border-bottom:none; }
+  .savedListItemMain { flex:1; min-width:0; }
   .savedListItemName { font-weight:bold; display:flex; align-items:center; gap:6px; }
   .savedListItemName img { width:16px; height:16px; flex-shrink:0; }
   .savedListItemAddr { font-size:12px; color:#888; margin-top:2px; margin-left:22px; }
   .savedListEmpty { padding:20px 0; text-align:center; color:#999; font-size:13px; }
+  .savedListEditBtn {
+    flex-shrink:0; border:none; background:#f2f2f2; border-radius:6px;
+    width:28px; height:28px; font-size:14px; color:#555; cursor:pointer;
+  }
+  #savedListTabs { display:flex; gap:6px; margin:0 0 10px; }
+  .savedListTab {
+    flex:1; padding:7px 0; border-radius:8px; border:1px solid #ddd;
+    background:#f7f7f7; font-size:13px; color:#555; text-align:center; cursor:pointer;
+  }
+  .savedListTab.active { background:#4b1575; border-color:#4b1575; color:#fff; }
+  .tabIcon { width:14px; height:14px; vertical-align:-2px; margin-right:2px; }
 
   #placeModalOverlay {
     position:fixed; top:0; left:0; width:100%; height:100%;
@@ -315,6 +335,11 @@
   <div id="savedListPanel">
     <button id="savedListCloseBtn">✕</button>
     <h3>저장한 장소</h3>
+    <div id="savedListTabs">
+      <div class="savedListTab active" data-filter="all">전체</div>
+      <div class="savedListTab" data-filter="star"><img id="tabStarIcon" class="tabIcon" alt=""> 별</div>
+      <div class="savedListTab" data-filter="circle"><img id="tabCircleIcon" class="tabIcon" alt=""> 동그라미</div>
+    </div>
     <div id="savedListItems"></div>
   </div>
 </div>
@@ -384,6 +409,32 @@
       <span class="swatch" style="background:#69b9d3;"></span>
       기타활엽수·오리나무
     </label>
+    <h3 style="margin-top:16px;">색상 단계 표시 설정</h3>
+    <label class="groupOption levelOption">
+      <input type="checkbox" id="levelCheck_1" checked>
+      <span class="swatch swatchLevel1"></span>
+      <span>1단계 <span class="levelDesc">(1~3영급)</span></span>
+    </label>
+    <label class="groupOption levelOption">
+      <input type="checkbox" id="levelCheck_2" checked>
+      <span class="swatch swatchLevel2"></span>
+      <span>2단계 <span class="levelDesc">(4~6영급 + 소·중경목)</span></span>
+    </label>
+    <label class="groupOption levelOption">
+      <input type="checkbox" id="levelCheck_3" checked>
+      <span class="swatch swatchLevel3"></span>
+      <span>3단계 <span class="levelDesc">(4~6영급 + 대경목)</span></span>
+    </label>
+    <label class="groupOption levelOption">
+      <input type="checkbox" id="levelCheck_4" checked>
+      <span class="swatch swatchLevel4"></span>
+      <span>4단계 <span class="levelDesc">(7~9영급 + 소·중경목)</span></span>
+    </label>
+    <label class="groupOption levelOption">
+      <input type="checkbox" id="levelCheck_5" checked>
+      <span class="swatch swatchLevel5"></span>
+      <span>5단계 <span class="levelDesc">(7~9영급 + 대경목)</span></span>
+    </label>
     <div class="panelBtnRow">
       <button id="groupSelectAllBtn">전체 선택</button>
       <button id="groupSelectNoneBtn">전체 해제</button>
@@ -411,13 +462,53 @@
     setTimeout(function() { el.style.display = 'none'; }, 600);
   }
 
+  // 특정 장소로 이동할 때 목표 좌표를 여기 담아둠. 키보드가 닫히며 실제로
+  // 화면 크기가 바뀌는 시점(visualViewport resize)에 setRealViewportHeight가
+  // 이 값을 보고 정확히 그 좌표로 relayout+센터를 맞춤. 고정된 지연시간을
+  // 추측해서 기다리는 방식보다 정확함(기기/상황마다 키보드 닫히는 속도가 다름).
+  var pendingMapTarget = null;
+
+  function goToMapTarget(pos, level) {
+    pendingMapTarget = { pos: pos, level: level };
+    if (document.activeElement) document.activeElement.blur();
+    // 키보드가 애초에 안 열려있었던 경우(=resize 이벤트가 안 옴) 대비 안전장치
+    setTimeout(applyPendingMapTarget, 350);
+  }
+
+  function applyPendingMapTarget() {
+    if (!pendingMapTarget) return;
+    var target = pendingMapTarget;
+    pendingMapTarget = null;
+    map.relayout();
+    if (target.level != null) {
+      // setCenter + setLevel을 연달아 부르는 방식은 특정 위치에서 화면 밖으로
+      // 튕겨나가는 문제가 있어서, "이 좌표가 반드시 화면 안에 보이게" 범위를
+      // 지정하는 setBounds 방식으로 전환함. 완벽하게 정중앙이 아닐 순 있어도
+      // 최소한 화면 밖으로 나가는 일은 없어야 함.
+      var lat = target.pos.getLat();
+      var lng = target.pos.getLng();
+      var d = 0.006; // 대략 기존 level 4 정도의 여유 범위
+      var bounds = new kakao.maps.LatLngBounds(
+        new kakao.maps.LatLng(lat - d, lng - d),
+        new kakao.maps.LatLng(lat + d, lng + d)
+      );
+      map.setBounds(bounds);
+    } else {
+      map.setCenter(target.pos);
+    }
+  }
+
   function setRealViewportHeight() {
     var vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.01;
     document.documentElement.style.setProperty('--vh', vh + 'px');
     if (typeof map !== 'undefined' && map) {
-      var center = map.getCenter();
-      map.relayout();
-      map.setCenter(center);
+      if (pendingMapTarget) {
+        applyPendingMapTarget();
+      } else {
+        var center = map.getCenter();
+        map.relayout();
+        map.setCenter(center);
+      }
     }
   }
   setRealViewportHeight();
@@ -537,17 +628,35 @@
   }
 
   // ===== 저장 장소 목록 패널 =====
+  var savedListFilter = 'all';
+
   function openSavedList() {
+    renderSavedListItems();
+    document.getElementById('savedListOverlay').classList.add('show');
+  }
+
+  function renderSavedListItems() {
     var itemsEl = document.getElementById('savedListItems');
     itemsEl.innerHTML = '';
-    if (savedPlaces.length === 0) {
+    var filtered = savedPlaces
+      .map(function(place, idx) { return { place: place, idx: idx }; })
+      .filter(function(entry) {
+        if (savedListFilter === 'all') return true;
+        return (entry.place.icon || 'star') === savedListFilter;
+      });
+
+    if (filtered.length === 0) {
       itemsEl.innerHTML = '<div class="savedListEmpty">저장된 장소가 없습니다.</div>';
-      document.getElementById('savedListOverlay').classList.add('show');
       return;
     }
-    savedPlaces.forEach(function(place) {
+    filtered.forEach(function(entry) {
+      var place = entry.place;
+      var idx = entry.idx;
       var row = document.createElement('div');
       row.className = 'savedListItem';
+
+      var mainDiv = document.createElement('div');
+      mainDiv.className = 'savedListItemMain';
 
       var nameDiv = document.createElement('div');
       nameDiv.className = 'savedListItemName';
@@ -564,21 +673,42 @@
       addrDiv.className = 'savedListItemAddr';
       addrDiv.textContent = '주소 조회 중...';
 
-      row.appendChild(nameDiv);
-      row.appendChild(addrDiv);
-      row.onclick = function() {
-        map.setCenter(new kakao.maps.LatLng(place.lat, place.lng));
-        map.setLevel(4);
+      mainDiv.appendChild(nameDiv);
+      mainDiv.appendChild(addrDiv);
+      row.appendChild(mainDiv);
+
+      var editBtn = document.createElement('button');
+      editBtn.className = 'savedListEditBtn';
+      editBtn.textContent = '✏️';
+      editBtn.title = '수정';
+      editBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
         closeSavedList();
-      };
+        openPlaceModalEdit(idx);
+      });
+      row.appendChild(editBtn);
+
+      row.addEventListener('click', function() {
+        closeSavedList();
+        goToMapTarget(new kakao.maps.LatLng(place.lat, place.lng), 4);
+      });
       itemsEl.appendChild(row);
 
       getShortAddress(place.lat, place.lng, function(addr) {
         addrDiv.textContent = addr || '주소 정보 없음';
       });
     });
-    document.getElementById('savedListOverlay').classList.add('show');
   }
+
+  document.querySelectorAll('.savedListTab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      savedListFilter = tab.getAttribute('data-filter');
+      document.querySelectorAll('.savedListTab').forEach(function(t) {
+        t.classList.toggle('active', t === tab);
+      });
+      renderSavedListItems();
+    });
+  });
 
   function closeSavedList() {
     document.getElementById('savedListOverlay').classList.remove('show');
@@ -923,6 +1053,25 @@
 
   loadRecentSearches();
 
+  // 검색결과에서 한번이라도 선택했던 장소를 다음 검색 시 목록 상단에 오게 하기 위한 기록.
+  // (장소명+주소 조합을 식별키로 씀 — 카카오 결과엔 고유 id가 늘 있는 게 아니라서)
+  var PLACE_HISTORY_KEY = 'placeSelectionHistory';
+  var placeSelectionHistory = {};
+  (function loadPlaceSelectionHistory() {
+    try {
+      var raw = localStorage.getItem(PLACE_HISTORY_KEY);
+      placeSelectionHistory = raw ? JSON.parse(raw) : {};
+    } catch (e) { placeSelectionHistory = {}; }
+  })();
+  function placeHistoryKey(item) {
+    return item.title + '|' + item.subtitle;
+  }
+  function recordPlaceSelection(item) {
+    var key = placeHistoryKey(item);
+    placeSelectionHistory[key] = (placeSelectionHistory[key] || 0) + 1;
+    try { localStorage.setItem(PLACE_HISTORY_KEY, JSON.stringify(placeSelectionHistory)); } catch (e) {}
+  }
+
   function renderCombinedResults(results) {
     searchMarkers.forEach(m => m.setMap(null));
     searchMarkers = [];
@@ -934,29 +1083,39 @@
       return;
     }
 
+    // 이전에 선택했던 적 있는 장소를 상단으로. 나머지는 원래 순서(카카오 관련도순) 유지.
+    results = results
+      .map(function(item, i) { return { item: item, i: i, hits: placeSelectionHistory[placeHistoryKey(item)] || 0 }; })
+      .sort(function(a, b) {
+        if (b.hits !== a.hits) return b.hits - a.hits;
+        return a.i - b.i;
+      })
+      .map(function(entry) { return entry.item; });
+
     var bounds = new kakao.maps.LatLngBounds();
     results.forEach(function(item) {
       var pos = new kakao.maps.LatLng(item.y, item.x);
-      var marker = new kakao.maps.Marker({ map: map, position: pos });
+      var marker = new kakao.maps.Marker({ map: map, position: pos, clickable: true });
       searchMarkers.push(marker);
       bounds.extend(pos);
 
       kakao.maps.event.addListener(marker, 'click', function() {
-        suppressNextMapClick = true;
+        // 저장장소 마커와 동일한 이유로 suppressNextMapClick 불필요(clickable:true가 처리함)
         infowindow.setContent(
           '<div style="background:rgba(255,255,255,0.88);padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:13px;max-width:220px;">' +
           item.title + '</div>'
         );
         infowindow.open(map, marker);
-        map.setCenter(pos);
+        recordPlaceSelection(item);
+        goToMapTarget(pos, null);
       });
 
       var row = document.createElement('div');
       row.textContent = item.title + ' (' + item.subtitle + ')';
       row.onclick = function() {
-        map.setCenter(pos);
-        map.setLevel(4);
         collapsePanel();
+        recordPlaceSelection(item);
+        goToMapTarget(pos, 4);
       };
       listEl.appendChild(row);
     });
@@ -1069,6 +1228,7 @@
   // 앱을 껐다가 다시 켤 때는 항상 전부 표시된 기본 상태로 시작하도록 함
   // (이전 방문 때 설정을 저장해서 불러오지 않음 — 의도적으로 매번 초기화).
   var groupVisibility = { oak: true, mixed: true, other: true };
+  var levelVisibility = { '1': true, '2': true, '3': true, '4': true, '5': true };
 
   function fetchElevation(lat, lng) {
     return fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
@@ -1150,6 +1310,7 @@
       let f = allFeatures[i];
       if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
       if (!groupVisibility[paletteGroupOf(f.properties)]) continue;
+      if (!levelVisibility[gradeLevel(f.properties)]) continue;
 
       f.coordsList.forEach(function(polyCoords) {
         if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
@@ -1168,7 +1329,7 @@
           strokeColor: '#4b1575',
           strokeOpacity: 0.8,
           fillColor: colorByGrade(f.properties),
-          fillOpacity: 0.55
+          fillOpacity: 0.45
         });
         currentPolygons.push(polygon);
 
@@ -1241,6 +1402,7 @@
   var roadviewModeActive = false;
   var roadviewMinimap = null;
   var roadviewMinimapMarker = null;
+  var roadviewHistoryPushed = false;
 
   function toggleRoadviewMode() {
     var btn = document.getElementById('roadviewBtn');
@@ -1261,6 +1423,13 @@
         return;
       }
       document.getElementById('roadviewPanel').classList.add('active');
+      // 폰의 뒤로가기 버튼을 눌렀을 때 앱이 통째로 종료되지 않고
+      // 로드뷰 화면만 닫히게 하기 위해, 로드뷰를 열 때 히스토리를 하나 쌓아둠.
+      // (이미 로드뷰가 열려있는 상태에서 다른 지점을 또 누른 경우는 새로 안 쌓음)
+      if (!roadviewHistoryPushed) {
+        roadviewHistoryPushed = true;
+        history.pushState({ roadview: true }, '');
+      }
 
       var firstTime = !roadview;
       if (firstTime) {
@@ -1292,8 +1461,24 @@
     });
   }
 
-  document.getElementById('roadviewCloseBtn').addEventListener('click', function() {
+  function closeRoadviewPanel() {
     document.getElementById('roadviewPanel').classList.remove('active');
+  }
+
+  document.getElementById('roadviewCloseBtn').addEventListener('click', function() {
+    if (roadviewHistoryPushed) {
+      // popstate 핸들러가 실제 닫기를 처리하도록, 뒤로가기와 동일한 경로를 태움
+      history.back();
+    } else {
+      closeRoadviewPanel();
+    }
+  });
+
+  window.addEventListener('popstate', function() {
+    if (roadviewHistoryPushed) {
+      roadviewHistoryPushed = false;
+      closeRoadviewPanel();
+    }
   });
 
   var isSatelliteView = true;
@@ -1398,10 +1583,23 @@
     });
   });
 
+  ['1', '2', '3', '4', '5'].forEach(function(key) {
+    var cb = document.getElementById('levelCheck_' + key);
+    cb.checked = levelVisibility[key];
+    cb.addEventListener('change', function() {
+      levelVisibility[key] = cb.checked;
+      renderVisiblePolygons();
+    });
+  });
+
   document.getElementById('groupSelectAllBtn').addEventListener('click', function() {
     ['oak', 'mixed', 'other'].forEach(function(key) {
       groupVisibility[key] = true;
       document.getElementById('groupCheck_' + key).checked = true;
+    });
+    ['1', '2', '3', '4', '5'].forEach(function(key) {
+      levelVisibility[key] = true;
+      document.getElementById('levelCheck_' + key).checked = true;
     });
     renderVisiblePolygons();
   });
@@ -1409,6 +1607,10 @@
     ['oak', 'mixed', 'other'].forEach(function(key) {
       groupVisibility[key] = false;
       document.getElementById('groupCheck_' + key).checked = false;
+    });
+    ['1', '2', '3', '4', '5'].forEach(function(key) {
+      levelVisibility[key] = false;
+      document.getElementById('levelCheck_' + key).checked = false;
     });
     renderVisiblePolygons();
   });
@@ -1568,6 +1770,11 @@
     '<circle cx="13" cy="13" r="10" fill="url(#circGrad)" stroke="#a15c00" stroke-width="1.5"/>' +
     '</svg>';
 
+  // 저장목록 상단 탭 아이콘도 실제 마커와 완전히 같은 SVG를 쓰도록 함
+  // (이전엔 이모지⭐🟡를 써서 색이 미묘하게 달랐음)
+  document.getElementById('tabStarIcon').src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(STAR_MARKER_SVG);
+  document.getElementById('tabCircleIcon').src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(CIRCLE_MARKER_SVG);
+
   function buildSavedPlaceMarkerImage(iconType) {
     if (iconType === 'circle') {
       return new kakao.maps.MarkerImage(
@@ -1609,32 +1816,53 @@
       var marker = new kakao.maps.Marker({
         map: map,
         position: new kakao.maps.LatLng(place.lat, place.lng),
-        image: buildSavedPlaceMarkerImage(place.icon)
+        image: buildSavedPlaceMarkerImage(place.icon),
+        clickable: true
       });
       kakao.maps.event.addListener(marker, 'click', function() {
-        suppressNextMapClick = true;
-        showSavedPlaceInfo(marker, place, idx, '조회 중...');
+        // clickable:true가 이미 "이 클릭이 지도로 전파되는 것"을 막아주므로
+        // suppressNextMapClick 플래그는 더 이상 필요 없음(오히려 소비가 안 돼서
+        // 남아있다가 바깥쪽 첫 탭을 무시시켜 "두 번 눌러야 닫힘" 버그의 원인이 됐음).
+        var myToken = ++latestClickToken;
+        showSavedPlaceInfo(marker, place, idx, '조회 중...', true);
         getShortAddress(place.lat, place.lng, function(addr) {
-          showSavedPlaceInfo(marker, place, idx, addr || '정보 없음');
+          // 그 사이 사용자가 말풍선을 닫았거나 다른 걸 눌렀으면, 주소 조회가 늦게
+          // 끝나도 말풍선을 다시 열지 않음(이게 "두 번 눌러야 닫히던" 원인이었음).
+          if (myToken !== latestClickToken) return;
+          showSavedPlaceInfo(marker, place, idx, addr || '정보 없음', false);
         });
       });
       savedPlaceMarkers.push(marker);
     });
   }
 
-  function showSavedPlaceInfo(marker, place, idx, addrText) {
+  function showSavedPlaceInfo(marker, place, idx, addrText, shouldOpen) {
     var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     var memoLine = place.memo ? ('<br><span style="font-size:12px;">' + escapeHtml(place.memo) + '</span>') : '';
     infowindow.setContent(
-      '<div style="background:rgba(255,255,255,0.88);padding:8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
+      '<div style="position:relative;background:rgba(255,255,255,0.88);padding:8px 24px 8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
+      '<a href="#" id="closeSavedPlaceInfoLink" style="position:absolute;top:4px;right:6px;color:#888;text-decoration:none;font-size:14px;line-height:1;">✕</a>' +
       escapeHtml(place.name) + dateLine +
       '<br>주소: ' + escapeHtml(addrText) + memoLine +
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
       ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
     );
-    infowindow.setPosition(marker.getPosition());
-    infowindow.open(map);
+    // shouldOpen이 false인 경우(주소 조회가 끝나 내용만 갱신하는 경우)는
+    // open()을 다시 부르지 않음 — 이미 닫혀있던 말풍선이 되살아나는 걸 방지.
+    if (shouldOpen) {
+      infowindow.setPosition(marker.getPosition());
+      infowindow.open(map);
+    }
     setTimeout(function() {
+      // 빈 곳을 눌러서 닫는 방식은 지도가 폴리곤으로 거의 덮여있어 안 먹힐 수 있으므로,
+      // 어디를 누르든 확실하게 한 번에 닫히는 ✕ 버튼을 직접 둠.
+      var closeLink = document.getElementById('closeSavedPlaceInfoLink');
+      if (closeLink) {
+        closeLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          infowindow.close();
+        });
+      }
       var editLink = document.getElementById('editSavedPlaceLink');
       if (editLink) {
         editLink.addEventListener('click', function(e) {
