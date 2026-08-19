@@ -87,6 +87,24 @@
     cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;
   }
   #locateBtn:active { background:#f0f0f0; }
+  #googleLoginBtn {
+    position:fixed; bottom:20px; right:64px; z-index:20;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    padding:0;
+  }
+  #googleLoginBtn:active { background:#f0f0f0; }
+  #googleLoginBtn.logged-in { background:#e8f5e9; }
+  #googleLoginBtn.syncing svg { animation: googleSyncPulse 0.9s ease-in-out infinite; }
+  @keyframes googleSyncPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  #googleLoginBtn svg { width:22px; height:22px; }
+  #googleLoginBtn .syncSpinner {
+    width:18px; height:18px; border-radius:50%;
+    border:2px solid #ddd; border-top-color:#4b1575;
+    animation: googleSyncSpin 0.8s linear infinite;
+  }
+  @keyframes googleSyncSpin { to { transform: rotate(360deg); } }
   #roadviewBtn {
     position:fixed; bottom:72px; right:12px; z-index:20;
     width:44px; height:44px; border-radius:50%; border:none;
@@ -293,6 +311,7 @@
     white-space:nowrap;
   }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 </head>
 <body>
@@ -399,6 +418,14 @@
 
 <div id="map"></div>
 <div id="watermark">ⓒ 고도뤼의 참나무 고목지도</div>
+<button id="googleLoginBtn" title="구글 로그인 (선택사항 — 로그인하면 저장한 장소를 다른 기기와 동기화)">
+  <svg viewBox="0 0 48 48">
+    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.5 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/>
+    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.5 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+    <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.5-5.3l-6.2-5.2C29.3 35.4 26.8 36 24 36c-5.3 0-9.7-3.1-11.3-7.9l-6.5 5C9.6 39.6 16.2 44 24 44z"/>
+    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.2 5.2C40.9 36.5 44 30.9 44 24c0-1.3-.1-2.7-.4-3.5z"/>
+  </svg>
+</button>
 <button id="locateBtn" title="내 위치 찾기">📍</button>
 <button id="roadviewBtn" title="로드뷰 모드">🚶</button>
 <button id="satelliteBtn" title="위성지도 전환">🛰️</button>
@@ -1828,16 +1855,30 @@
     return d.getFullYear() + '-' + mm + '-' + dd;
   }
 
+  function genPlaceId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
   function loadSavedPlaces() {
     try {
       var raw = localStorage.getItem('savedPlaces');
       savedPlaces = raw ? JSON.parse(raw) : [];
     } catch (e) { savedPlaces = []; }
+    // 예전에 저장된(동기화 기능 생기기 전) 항목엔 고유 id가 없으므로 지금 채워둠
+    // (구글 드라이브 동기화 시 기기 간 병합 기준으로 씀)
+    var idsAdded = false;
+    savedPlaces.forEach(function(p) {
+      if (!p._id) { p._id = genPlaceId(); idsAdded = true; }
+    });
+    if (idsAdded) {
+      try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
+    }
     renderSavedPlaces();
   }
 
   function persistSavedPlaces() {
     try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
+    syncToDriveIfLoggedIn();
   }
 
   function renderSavedPlaces() {
@@ -1981,7 +2022,9 @@
     var memo = document.getElementById('placeModalMemo').value;
     var entry = {
       lat: placeModalLat, lng: placeModalLng, name: name,
-      icon: placeModalSelectedIcon, date: date, memo: memo
+      icon: placeModalSelectedIcon, date: date, memo: memo,
+      _id: (placeModalMode === 'edit' && savedPlaces[placeModalTargetIdx] && savedPlaces[placeModalTargetIdx]._id)
+        || genPlaceId()
     };
     if (placeModalMode === 'create') {
       savedPlaces.push(entry);
@@ -2092,6 +2135,174 @@
   } else if (!savedView) {
     hideSplash();
   }
+
+  // ===== 구글 로그인 + 드라이브 동기화 (전부 선택사항) =====
+  // 로그인 안 해도 지금처럼 이 기기(브라우저)에 계속 저장됨. 로그인하면
+  // 그 데이터를 구글 드라이브(이 앱 전용 숨김 저장공간)에도 올려서
+  // 다른 기기에서 로그인했을 때 같이 보이게 함.
+  var GOOGLE_CLIENT_ID = '135848907292-lv0rrnunqb3hs56t8v8i2aff4fh8gicr.apps.googleusercontent.com';
+  var GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+  var DRIVE_FILE_NAME = 'chamnamu_saved_places.json';
+
+  var googleAccessToken = null;
+  var googleTokenClient = null;
+  var driveFileId = null;
+
+  function setLoginBtnState(state) {
+    var btn = document.getElementById('googleLoginBtn');
+    if (!btn) return;
+    btn.classList.toggle('logged-in', state === 'logged-in' || state === 'syncing');
+    btn.classList.toggle('syncing', state === 'syncing');
+    if (state === 'logged-in') {
+      btn.title = '구글 계정에 로그인됨 (다시 누르면 로그아웃)';
+    } else if (state === 'syncing') {
+      btn.title = '구글 드라이브와 동기화 중...';
+    } else {
+      btn.title = '구글 로그인 (선택사항 — 로그인하면 저장한 장소를 다른 기기와 동기화)';
+    }
+  }
+
+  function driveApiFetch(url, options) {
+    options = options || {};
+    options.headers = options.headers || {};
+    options.headers['Authorization'] = 'Bearer ' + googleAccessToken;
+    return fetch(url, options);
+  }
+
+  function findDriveFile() {
+    var url = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=' +
+      encodeURIComponent("name='" + DRIVE_FILE_NAME + "'") + '&fields=files(id,name)';
+    return driveApiFetch(url).then(function(res) {
+      if (!res.ok) throw new Error('drive file search failed: ' + res.status);
+      return res.json();
+    }).then(function(data) {
+      driveFileId = (data.files && data.files.length > 0) ? data.files[0].id : null;
+      return driveFileId;
+    });
+  }
+
+  function downloadDriveFile(fileId) {
+    var url = 'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media';
+    return driveApiFetch(url).then(function(res) {
+      if (!res.ok) throw new Error('drive download failed: ' + res.status);
+      return res.json();
+    });
+  }
+
+  function uploadDriveFile(content) {
+    var body = JSON.stringify(content);
+    if (driveFileId) {
+      return driveApiFetch(
+        'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=media',
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body }
+      );
+    }
+    var metadata = { name: DRIVE_FILE_NAME, parents: ['appDataFolder'] };
+    var boundary = 'chamnamu_boundary_314159';
+    var delimiter = '\r\n--' + boundary + '\r\n';
+    var closeDelim = '\r\n--' + boundary + '--';
+    var multipartBody =
+      delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
+      delimiter + 'Content-Type: application/json\r\n\r\n' + body +
+      closeDelim;
+    return driveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
+      body: multipartBody
+    }).then(function(res) {
+      if (!res.ok) throw new Error('drive upload failed: ' + res.status);
+      return res.json();
+    }).then(function(data) {
+      driveFileId = data.id;
+      return data;
+    });
+  }
+
+  // 이 기기 데이터와 드라이브 데이터를 합침. 같은 _id면 이 기기 쪽을 우선(단순 규칙),
+  // 드라이브에만 있는(다른 기기에서 저장된) 항목은 그대로 추가.
+  function mergePlaces(localList, remoteList) {
+    var byId = {};
+    localList.forEach(function(p) { if (p._id) byId[p._id] = p; });
+    remoteList.forEach(function(p) {
+      if (p._id && !byId[p._id]) byId[p._id] = p;
+    });
+    return Object.keys(byId).map(function(k) { return byId[k]; });
+  }
+
+  function onGoogleLoginSuccess() {
+    setLoginBtnState('syncing');
+    findDriveFile().then(function(fileId) {
+      if (fileId) {
+        return downloadDriveFile(fileId).then(function(remoteData) {
+          var remoteList = (remoteData && remoteData.places) || [];
+          savedPlaces = mergePlaces(savedPlaces, remoteList);
+          try { localStorage.setItem('savedPlaces', JSON.stringify(savedPlaces)); } catch (e) {}
+          renderSavedPlaces();
+          return uploadDriveFile({ places: savedPlaces });
+        });
+      }
+      return uploadDriveFile({ places: savedPlaces });
+    }).then(function() {
+      setLoginBtnState('logged-in');
+    }).catch(function(err) {
+      console.log('구글 드라이브 동기화 실패(로컬 저장에는 영향 없음):', err);
+      googleAccessToken = null;
+      try { localStorage.removeItem('googleLoggedIn'); } catch (e) {}
+      setLoginBtnState('logged-out');
+    });
+  }
+
+  function syncToDriveIfLoggedIn() {
+    if (!googleAccessToken) return;
+    uploadDriveFile({ places: savedPlaces }).catch(function(err) {
+      console.log('동기화 실패(무시하고 계속 진행, 로컬 저장은 정상):', err);
+    });
+  }
+
+  function initGoogleLogin() {
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+      setTimeout(initGoogleLogin, 300);
+      return;
+    }
+    googleTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GOOGLE_DRIVE_SCOPE,
+      callback: function(tokenResponse) {
+        if (tokenResponse && tokenResponse.access_token) {
+          googleAccessToken = tokenResponse.access_token;
+          try { localStorage.setItem('googleLoggedIn', '1'); } catch (e) {}
+          onGoogleLoginSuccess();
+        }
+      }
+    });
+
+    var wasLoggedIn = false;
+    try { wasLoggedIn = localStorage.getItem('googleLoggedIn') === '1'; } catch (e) {}
+    if (wasLoggedIn) {
+      // 이전에 로그인했던 적 있으면, 팝업 없이 조용히 다시 로그인 시도
+      googleTokenClient.requestAccessToken({ prompt: '' });
+    }
+  }
+
+  document.getElementById('googleLoginBtn').addEventListener('click', function() {
+    if (googleAccessToken) {
+      if (confirm('구글 계정에서 로그아웃할까요?\n(이 기기에 저장된 장소는 그대로 남아있어요)')) {
+        try { google.accounts.oauth2.revoke(googleAccessToken, function() {}); } catch (e) {}
+        googleAccessToken = null;
+        driveFileId = null;
+        try { localStorage.removeItem('googleLoggedIn'); } catch (e) {}
+        setLoginBtnState('logged-out');
+      }
+      return;
+    }
+    if (!googleTokenClient) {
+      alert('구글 로그인 기능을 불러오는 중이에요. 잠시 후 다시 눌러주세요.');
+      return;
+    }
+    googleTokenClient.requestAccessToken({ prompt: 'consent' });
+  });
+
+  initGoogleLogin();
 </script>
 
 </body>
