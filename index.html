@@ -336,9 +336,9 @@
     <button id="savedListCloseBtn">✕</button>
     <h3>저장한 장소</h3>
     <div id="savedListTabs">
-      <div class="savedListTab active" data-filter="all">전체</div>
-      <div class="savedListTab" data-filter="star"><img id="tabStarIcon" class="tabIcon" alt=""> 별</div>
+      <div class="savedListTab active" data-filter="star"><img id="tabStarIcon" class="tabIcon" alt=""> 별</div>
       <div class="savedListTab" data-filter="circle"><img id="tabCircleIcon" class="tabIcon" alt=""> 동그라미</div>
+      <div class="savedListTab" data-filter="x"><img id="tabXIcon" class="tabIcon" alt=""> X(꽝)</div>
     </div>
     <div id="savedListItems"></div>
   </div>
@@ -372,6 +372,19 @@
             </radialGradient>
           </defs>
           <circle cx="13" cy="13" r="10" fill="url(#circGradPreview)" stroke="#a15c00" stroke-width="1.5"/>
+        </svg>
+      </button>
+      <button type="button" class="placeIconChoice" data-icon="x">
+        <svg width="26" height="26" viewBox="0 0 26 26">
+          <defs>
+            <radialGradient id="xGradPreview" cx="35%" cy="30%" r="75%">
+              <stop offset="0%" stop-color="#8a8a8a"/>
+              <stop offset="60%" stop-color="#555"/>
+              <stop offset="100%" stop-color="#222"/>
+            </radialGradient>
+          </defs>
+          <circle cx="13" cy="13" r="10" fill="url(#xGradPreview)" stroke="#000" stroke-width="1.5"/>
+          <path d="M9 9 L17 17 M17 9 L9 17" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
         </svg>
       </button>
     </div>
@@ -628,9 +641,14 @@
   }
 
   // ===== 저장 장소 목록 패널 =====
-  var savedListFilter = 'all';
+  var savedListFilter = 'star';
 
   function openSavedList() {
+    // 저장목록을 열 때마다 항상 "별" 탭에서 시작 (이전에 다른 탭 보고 있었어도 초기화)
+    savedListFilter = 'star';
+    document.querySelectorAll('.savedListTab').forEach(function(t) {
+      t.classList.toggle('active', t.getAttribute('data-filter') === 'star');
+    });
     renderSavedListItems();
     document.getElementById('savedListOverlay').classList.add('show');
   }
@@ -641,7 +659,6 @@
     var filtered = savedPlaces
       .map(function(place, idx) { return { place: place, idx: idx }; })
       .filter(function(entry) {
-        if (savedListFilter === 'all') return true;
         return (entry.place.icon || 'star') === savedListFilter;
       });
 
@@ -661,9 +678,7 @@
       var nameDiv = document.createElement('div');
       nameDiv.className = 'savedListItemName';
       var iconImg = document.createElement('img');
-      iconImg.src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(
-        place.icon === 'circle' ? CIRCLE_MARKER_SVG : STAR_MARKER_SVG
-      );
+      iconImg.src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(svgForIcon(place.icon));
       var nameText = document.createElement('span');
       nameText.textContent = place.name;
       nameDiv.appendChild(iconImg);
@@ -1770,15 +1785,31 @@
     '<circle cx="13" cy="13" r="10" fill="url(#circGrad)" stroke="#a15c00" stroke-width="1.5"/>' +
     '</svg>';
 
+  var X_MARKER_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">' +
+    '<defs><radialGradient id="xGrad" cx="35%" cy="30%" r="75%">' +
+    '<stop offset="0%" stop-color="#8a8a8a"/><stop offset="60%" stop-color="#555"/><stop offset="100%" stop-color="#222"/>' +
+    '</radialGradient></defs>' +
+    '<circle cx="13" cy="13" r="10" fill="url(#xGrad)" stroke="#000" stroke-width="1.5"/>' +
+    '<path d="M9 9 L17 17 M17 9 L9 17" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>' +
+    '</svg>';
+
+  function svgForIcon(iconType) {
+    if (iconType === 'circle') return CIRCLE_MARKER_SVG;
+    if (iconType === 'x') return X_MARKER_SVG;
+    return STAR_MARKER_SVG;
+  }
+
   // 저장목록 상단 탭 아이콘도 실제 마커와 완전히 같은 SVG를 쓰도록 함
   // (이전엔 이모지⭐🟡를 써서 색이 미묘하게 달랐음)
   document.getElementById('tabStarIcon').src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(STAR_MARKER_SVG);
   document.getElementById('tabCircleIcon').src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(CIRCLE_MARKER_SVG);
+  document.getElementById('tabXIcon').src = 'data:image/svg+xml;utf-8,' + encodeURIComponent(X_MARKER_SVG);
 
   function buildSavedPlaceMarkerImage(iconType) {
-    if (iconType === 'circle') {
+    if (iconType === 'circle' || iconType === 'x') {
       return new kakao.maps.MarkerImage(
-        'data:image/svg+xml;utf-8,' + encodeURIComponent(CIRCLE_MARKER_SVG),
+        'data:image/svg+xml;utf-8,' + encodeURIComponent(svgForIcon(iconType)),
         new kakao.maps.Size(26, 26),
         { offset: new kakao.maps.Point(13, 13) }
       );
