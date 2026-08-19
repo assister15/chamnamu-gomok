@@ -312,7 +312,7 @@
     float:right; background:none; border:none; font-size:18px;
     cursor:pointer; color:#888;
   }
-  #placeModalName, #placeModalDate, #placeModalFolder {
+  #placeModalName, #placeModalFolder {
     width:100%; box-sizing:border-box; padding:8px; font-size:14px;
     border:1px solid #ccc; border-radius:6px; margin-top:8px; font-family:inherit;
     background:#fff;
@@ -461,8 +461,6 @@
         </svg>
       </button>
     </div>
-    <label class="placeModalLabel">방문일</label>
-    <input type="date" id="placeModalDate">
     <label class="placeModalLabel">폴더 (선택)</label>
     <select id="placeModalFolder">
       <option value="">선택 안 함</option>
@@ -2046,13 +2044,6 @@
     );
   }
 
-  function todayISO() {
-    var d = new Date();
-    var mm = String(d.getMonth() + 1).padStart(2, '0');
-    var dd = String(d.getDate()).padStart(2, '0');
-    return d.getFullYear() + '-' + mm + '-' + dd;
-  }
-
   function genPlaceId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
@@ -2140,11 +2131,10 @@
   }
 
   function showSavedPlaceInfo(marker, place, idx, addrText, shouldOpen) {
-    var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     infowindow.setContent(
       '<div style="position:relative;background:rgba(255,255,255,0.88);padding:8px 24px 8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
       '<a href="#" id="closeSavedPlaceInfoLink" style="position:absolute;top:4px;right:6px;color:#888;text-decoration:none;font-size:14px;line-height:1;">✕</a>' +
-      escapeHtml(place.name) + dateLine +
+      escapeHtml(place.name) +
       '<br>주소: ' + escapeHtml(addrText) +
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
       ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
@@ -2220,7 +2210,6 @@
     placeModalLng = p.lng;
     document.getElementById('placeModalTitle').textContent = '장소 수정';
     document.getElementById('placeModalName').value = p.name;
-    document.getElementById('placeModalDate').value = p.date || todayISO();
     document.getElementById('placeModalFolder').value = p.folderId || '';
     setPlaceModalIcon(p.icon || 'star');
     document.getElementById('placeModalDeleteBtn').style.display = 'block';
@@ -2234,7 +2223,6 @@
     placeModalOpenedFromList = false;
     document.getElementById('placeModalTitle').textContent = '장소 저장';
     document.getElementById('placeModalName').value = '';
-    document.getElementById('placeModalDate').value = todayISO();
     document.getElementById('placeModalFolder').value = '';
     setPlaceModalIcon('star');
     document.getElementById('placeModalDeleteBtn').style.display = 'none';
@@ -2273,11 +2261,10 @@
 
   document.getElementById('placeModalSaveBtn').addEventListener('click', function() {
     var name = document.getElementById('placeModalName').value.trim() || '이름없음';
-    var date = document.getElementById('placeModalDate').value || todayISO();
     var folderId = document.getElementById('placeModalFolder').value || null;
     var entry = {
       lat: placeModalLat, lng: placeModalLng, name: name,
-      icon: placeModalSelectedIcon, date: date, folderId: folderId,
+      icon: placeModalSelectedIcon, folderId: folderId,
       _id: (placeModalMode === 'edit' && savedPlaces[placeModalTargetIdx] && savedPlaces[placeModalTargetIdx]._id)
         || genPlaceId()
     };
