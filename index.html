@@ -2232,7 +2232,6 @@
     }).catch(function(err) {
       console.log('구글 드라이브 동기화 실패(로컬 저장에는 영향 없음):', err);
       googleAccessToken = null;
-      try { localStorage.removeItem('googleLoggedIn'); } catch (e) {}
       setLoginBtnState('logged-out');
     });
   }
@@ -2255,18 +2254,14 @@
       callback: function(tokenResponse) {
         if (tokenResponse && tokenResponse.access_token) {
           googleAccessToken = tokenResponse.access_token;
-          try { localStorage.setItem('googleLoggedIn', '1'); } catch (e) {}
           onGoogleLoginSuccess();
         }
       }
     });
-
-    var wasLoggedIn = false;
-    try { wasLoggedIn = localStorage.getItem('googleLoggedIn') === '1'; } catch (e) {}
-    if (wasLoggedIn) {
-      // 이전에 로그인했던 적 있으면, 팝업 없이 조용히 다시 로그인 시도
-      googleTokenClient.requestAccessToken({ prompt: '' });
-    }
+    // 앱을 껐다가 켤 때마다 자동으로 재로그인을 시도하면(구글 쪽 특성상) 매번
+    // 계정 선택 화면이 뜨는 문제가 있어서, 자동 재로그인은 하지 않음.
+    // 항상 "로그아웃 상태"로 시작하고, 동기화가 필요할 때 사용자가 직접
+    // 로그인 버튼을 눌러야 함. 로그인 안 해도 이 기기 저장은 그대로 유지됨.
   }
 
   document.getElementById('googleLoginBtn').addEventListener('click', function() {
@@ -2275,7 +2270,6 @@
         try { google.accounts.oauth2.revoke(googleAccessToken, function() {}); } catch (e) {}
         googleAccessToken = null;
         driveFileId = null;
-        try { localStorage.removeItem('googleLoggedIn'); } catch (e) {}
         setLoginBtnState('logged-out');
       }
       return;
