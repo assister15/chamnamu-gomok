@@ -243,15 +243,22 @@
   .savedListTab.active { background:#4b1575; border-color:#4b1575; color:#fff; }
   .tabIcon { width:14px; height:14px; vertical-align:-2px; margin-right:2px; }
 
-  #folderBar { display:flex; gap:6px; margin-bottom:10px; }
-  #folderFilterSelect {
-    flex:1; padding:6px 8px; border-radius:8px; border:1px solid #ddd;
-    background:#fff; font-size:13px; color:#333;
+  #folderBar { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:10px; }
+  #folderBreadcrumb { display:flex; align-items:center; gap:8px; }
+  #folderBackBtn {
+    padding:6px 10px; border-radius:8px; border:1px solid #ddd;
+    background:#f7f7f7; font-size:12px; color:#4b1575; white-space:nowrap;
   }
+  #folderBreadcrumbName { font-size:13px; color:#555; font-weight:bold; }
   #manageFoldersBtn {
     padding:6px 10px; border-radius:8px; border:1px solid #ddd;
     background:#f7f7f7; font-size:12px; color:#555; white-space:nowrap;
   }
+  .savedListFolderRow {
+    display:flex; align-items:center; gap:8px; padding:10px 6px;
+    border-bottom:1px solid #eee; cursor:pointer; font-size:14px;
+  }
+  .savedListFolderRow .folderCount { margin-left:auto; font-size:12px; color:#999; }
 
   #folderManageOverlay {
     position:fixed; top:0; left:0; width:100%; height:100%;
@@ -272,6 +279,10 @@
   .folderManageRow .folderDeleteBtn {
     border:none; background:#f2f2f2; border-radius:6px; width:26px; height:26px;
     color:#c0392b; font-size:13px; cursor:pointer;
+  }
+  .folderManageRow .folderRenameBtn {
+    border:none; background:#f2f2f2; border-radius:6px; width:26px; height:26px;
+    font-size:12px; cursor:pointer;
   }
   #folderManageAddRow { display:flex; gap:8px; margin-top:12px; }
   #newFolderNameInput {
@@ -402,10 +413,10 @@
       <div class="savedListTab" data-filter="circle"><img id="tabCircleIcon" class="tabIcon" alt=""> 동그라미</div>
     </div>
     <div id="folderBar">
-      <select id="folderFilterSelect">
-        <option value="">전체</option>
-        <option value="__none__">폴더 없음</option>
-      </select>
+      <div id="folderBreadcrumb" style="display:none;">
+        <button id="folderBackBtn">← 목록으로</button>
+        <span id="folderBreadcrumbName"></span>
+      </div>
       <button id="manageFoldersBtn">폴더 관리</button>
     </div>
     <div id="savedListItems"></div>
@@ -721,37 +732,74 @@
 
   // ===== 저장 장소 목록 패널 =====
   var savedListFilter = 'star';
-  var savedListFolderFilter = '';
+  var currentFolderId = null; // null = 목록 첫 화면(폴더들+미지정 장소), 그 외엔 해당 폴더 안
+  var savedListHistoryPushed = false;
 
   function openSavedList() {
-    // 저장목록을 열 때마다 항상 "별" 탭 + "전체" 폴더에서 시작
+    // 저장목록을 열 때마다 항상 "별" 탭 + 목록 첫 화면(폴더 밖)에서 시작
     savedListFilter = 'star';
-    savedListFolderFilter = '';
+    currentFolderId = null;
     document.querySelectorAll('.savedListTab').forEach(function(t) {
       t.classList.toggle('active', t.getAttribute('data-filter') === 'star');
     });
-    document.getElementById('folderFilterSelect').value = '';
     renderSavedListItems();
     document.getElementById('savedListOverlay').classList.add('show');
+    // 뒤로가기 버튼으로 지도로 돌아가게(앱 종료 방지)
+    if (!savedListHistoryPushed) {
+      savedListHistoryPushed = true;
+      history.pushState({ savedList: true }, '');
+    }
   }
 
   function renderSavedListItems() {
     var itemsEl = document.getElementById('savedListItems');
     itemsEl.innerHTML = '';
-    var filtered = savedPlaces
-      .map(function(place, idx) { return { place: place, idx: idx }; })
-      .filter(function(entry) {
-        if ((entry.place.icon || 'star') !== savedListFilter) return false;
-        if (savedListFolderFilter === '__none__') return !entry.place.folderId;
-        if (savedListFolderFilter) return entry.place.folderId === savedListFolderFilter;
-        return true;
-      });
 
-    if (filtered.length === 0) {
-      itemsEl.innerHTML = '<div class="savedListEmpty">저장된 장소가 없습니다.</div>';
+    var breadcrumb = document.getElementById('folderBreadcrumb');
+    if (currentFolderId) {
+      var curFolder = savedFolders.find(function(f) { return f._id === currentFolderId; });
+      breadcrumb.style.display = 'flex';
+      document.getElementById('folderBreadcrumbName').textContent = curFolder ? ('📁 ' + curFolder.name) : '';
+    } else {
+      breadcrumb.style.display = 'none';
+    }
+
+    var tabMatched = savedPlaces
+      .map(function(place, idx) { return { place: place, idx: idx }; })
+      .filter(function(entry) { return (entry.place.icon || 'star') === savedListFilter; });
+
+    var hasAnyContent = false;
+
+    // 목록 첫 화면에서만 폴더들을 목록처럼 보여줌
+    if (!currentFolderId) {
+      savedFolders.forEach(function(folder) {
+        var count = tabMatched.filter(function(e) { return e.place.folderId === folder._id; }).length;
+        hasAnyContent = true;
+        var folderRow = document.createElement('div');
+        folderRow.className = 'savedListFolderRow';
+        folderRow.innerHTML = '<span>📁</span><span>' + escapeHtml(folder.name) + '</span>';
+        var countSpan = document.createElement('span');
+        countSpan.className = 'folderCount';
+        countSpan.textContent = count + '개';
+        folderRow.appendChild(countSpan);
+        folderRow.addEventListener('click', function() {
+          currentFolderId = folder._id;
+          renderSavedListItems();
+        });
+        itemsEl.appendChild(folderRow);
+      });
+    }
+
+    var visibleEntries = tabMatched.filter(function(entry) {
+      return currentFolderId ? entry.place.folderId === currentFolderId : !entry.place.folderId;
+    });
+
+    if (visibleEntries.length === 0 && !hasAnyContent) {
+      itemsEl.innerHTML += '<div class="savedListEmpty">저장된 장소가 없습니다.</div>';
       return;
     }
-    filtered.forEach(function(entry) {
+
+    visibleEntries.forEach(function(entry) {
       var place = entry.place;
       var idx = entry.idx;
       var row = document.createElement('div');
@@ -768,15 +816,6 @@
       nameText.textContent = place.name;
       nameDiv.appendChild(iconImg);
       nameDiv.appendChild(nameText);
-      if (place.folderId) {
-        var folder = savedFolders.find(function(f) { return f._id === place.folderId; });
-        if (folder) {
-          var folderTag = document.createElement('span');
-          folderTag.style.cssText = 'font-size:11px;color:#888;margin-left:6px;';
-          folderTag.textContent = '📁 ' + folder.name;
-          nameDiv.appendChild(folderTag);
-        }
-      }
 
       var addrDiv = document.createElement('div');
       addrDiv.className = 'savedListItemAddr';
@@ -793,7 +832,7 @@
       editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         closeSavedList();
-        openPlaceModalEdit(idx);
+        openPlaceModalEdit(idx, true);
       });
       row.appendChild(editBtn);
 
@@ -819,8 +858,8 @@
     });
   });
 
-  document.getElementById('folderFilterSelect').addEventListener('change', function() {
-    savedListFolderFilter = this.value;
+  document.getElementById('folderBackBtn').addEventListener('click', function() {
+    currentFolderId = null;
     renderSavedListItems();
   });
 
@@ -845,6 +884,21 @@
       row.className = 'folderManageRow';
       var nameSpan = document.createElement('span');
       nameSpan.textContent = '📁 ' + folder.name;
+      var btnGroup = document.createElement('div');
+      btnGroup.style.cssText = 'display:flex;gap:6px;';
+      var renameBtn = document.createElement('button');
+      renameBtn.className = 'folderRenameBtn';
+      renameBtn.textContent = '✏️';
+      renameBtn.addEventListener('click', function() {
+        var newName = prompt('폴더 이름 수정', folder.name);
+        if (newName === null) return;
+        newName = newName.trim();
+        if (!newName) return;
+        folder.name = newName;
+        persistSavedFolders();
+        renderFolderManageList();
+        renderSavedListItems();
+      });
       var delBtn = document.createElement('button');
       delBtn.className = 'folderDeleteBtn';
       delBtn.textContent = '✕';
@@ -857,8 +911,10 @@
         renderFolderManageList();
         renderSavedListItems();
       });
+      btnGroup.appendChild(renameBtn);
+      btnGroup.appendChild(delBtn);
       row.appendChild(nameSpan);
-      row.appendChild(delBtn);
+      row.appendChild(btnGroup);
       listEl.appendChild(row);
     });
   }
@@ -881,8 +937,17 @@
     if (e.key === 'Enter') document.getElementById('addFolderBtn').click();
   });
 
-  function closeSavedList() {
+  function hideSavedListPanel() {
     document.getElementById('savedListOverlay').classList.remove('show');
+  }
+
+  function closeSavedList() {
+    if (savedListHistoryPushed) {
+      // popstate 핸들러가 실제 닫기를 처리하도록, 뒤로가기와 동일한 경로를 태움
+      history.back();
+    } else {
+      hideSavedListPanel();
+    }
   }
 
   document.getElementById('savedListBtn').addEventListener('click', openSavedList);
@@ -1650,6 +1715,10 @@
       roadviewHistoryPushed = false;
       closeRoadviewPanel();
     }
+    if (savedListHistoryPushed) {
+      savedListHistoryPushed = false;
+      hideSavedListPanel();
+    }
   });
 
   var isSatelliteView = true;
@@ -2037,17 +2106,10 @@
     });
     modalSelect.value = savedFolders.some(function(f) { return f._id === prevModalVal; }) ? prevModalVal : '';
 
-    var filterSelect = document.getElementById('folderFilterSelect');
-    var prevFilterVal = filterSelect.value;
-    filterSelect.innerHTML = '<option value="">전체</option><option value="__none__">폴더 없음</option>';
-    savedFolders.forEach(function(f) {
-      var opt = document.createElement('option');
-      opt.value = f._id;
-      opt.textContent = f.name;
-      filterSelect.appendChild(opt);
-    });
-    filterSelect.value = (prevFilterVal === '__none__' || savedFolders.some(function(f) { return f._id === prevFilterVal; }))
-      ? prevFilterVal : '';
+    // 저장목록이 열려있는 상태에서 폴더가 추가/삭제/이름변경 됐을 수 있으니 같이 갱신
+    if (document.getElementById('savedListOverlay').classList.contains('show')) {
+      renderSavedListItems();
+    }
   }
 
   function renderSavedPlaces() {
@@ -2149,6 +2211,7 @@
     placeModalTargetIdx = null;
     placeModalLat = lat;
     placeModalLng = lng;
+    placeModalReturnToList = false;
     document.getElementById('placeModalTitle').textContent = '장소 저장';
     document.getElementById('placeModalName').value = '';
     document.getElementById('placeModalMemo').value = '';
@@ -2159,13 +2222,16 @@
     document.getElementById('placeModalOverlay').classList.add('show');
   }
 
-  function openPlaceModalEdit(idx) {
+  var placeModalReturnToList = false;
+
+  function openPlaceModalEdit(idx, fromSavedList) {
     var p = savedPlaces[idx];
     if (!p) return;
     placeModalMode = 'edit';
     placeModalTargetIdx = idx;
     placeModalLat = p.lat;
     placeModalLng = p.lng;
+    placeModalReturnToList = !!fromSavedList;
     document.getElementById('placeModalTitle').textContent = '장소 수정';
     document.getElementById('placeModalName').value = p.name;
     document.getElementById('placeModalMemo').value = p.memo || '';
@@ -2179,6 +2245,10 @@
 
   function closePlaceModal() {
     document.getElementById('placeModalOverlay').classList.remove('show');
+    if (placeModalReturnToList) {
+      placeModalReturnToList = false;
+      openSavedList();
+    }
   }
 
   document.getElementById('placeModalCloseBtn').addEventListener('click', closePlaceModal);
