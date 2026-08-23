@@ -312,7 +312,7 @@
     float:right; background:none; border:none; font-size:18px;
     cursor:pointer; color:#888;
   }
-  #placeModalName, #placeModalFolder {
+  #placeModalName, #placeModalDate, #placeModalFolder {
     width:100%; box-sizing:border-box; padding:8px; font-size:14px;
     border:1px solid #ccc; border-radius:6px; margin-top:8px; font-family:inherit;
     background:#fff;
@@ -461,6 +461,8 @@
         </svg>
       </button>
     </div>
+    <label class="placeModalLabel">방문일</label>
+    <input type="date" id="placeModalDate">
     <label class="placeModalLabel">폴더 (선택)</label>
     <select id="placeModalFolder">
       <option value="">선택 안 함</option>
@@ -1005,6 +1007,30 @@
   var navLastFixTime = null;
   var navAnimRAF = null;
   var navHeadingAngle = 0;
+  var navHeadingSource = 'compass'; // 'gps' 또는 'compass' — 이동 중엔 gps, 정지 시 compass
+  var navLastRawPos = null; // GPS 진행방향 계산용 이전 원시 좌표
+  var NAV_GPS_HEADING_SPEED = 0.6; // m/s — 이 속도 이상 움직일 때만 GPS 방향 사용
+  var NAV_HEADING_SMOOTH = 0.25; // 회전 스무딩 계수 (낮을수록 부드럽고 느림)
+
+  function shortestAngleDiff(a, b) {
+    return ((b - a + 540) % 360) - 180;
+  }
+
+  function haversineDistance(lat1, lng1, lat2, lng2) {
+    var R = 6371000, toRad = Math.PI / 180;
+    var dLat = (lat2 - lat1) * toRad, dLng = (lng2 - lng1) * toRad;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function calcBearing(lat1, lng1, lat2, lng2) {
+    var toRad = Math.PI / 180, toDeg = 180 / Math.PI;
+    var y = Math.sin((lng2 - lng1) * toRad) * Math.cos(lat2 * toRad);
+    var x = Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) -
+      Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos((lng2 - lng1) * toRad);
+    return (Math.atan2(y, x) * toDeg + 360) % 360;
+  }
 
   function toggleNavTracking() {
     if (navTrackingActive) {
@@ -1015,24 +1041,27 @@
   }
 
   function buildUserMarkerImage(angle) {
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">' +
-      '<g transform="rotate(' + angle + ' 15 15)">' +
-      '<circle cx="15" cy="15" r="10" fill="#4285F4" stroke="white" stroke-width="3"/>' +
-      '<path d="M15 5 L20 16 L15 13 L10 16 Z" fill="#fff"/>' +
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">' +
+      '<g transform="rotate(' + angle + ' 17 17)">' +
+      '<path d="M17 3 L27 28 L17 21.5 L7 28 Z" fill="#4285F4" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>' +
       '</g></svg>';
     return new kakao.maps.MarkerImage(
       'data:image/svg+xml;utf-8,' + encodeURIComponent(svg),
-      new kakao.maps.Size(30, 30),
-      { offset: new kakao.maps.Point(15, 15) }
+      new kakao.maps.Size(34, 34),
+      { offset: new kakao.maps.Point(17, 17) }
     );
   }
 
-  function updateUserHeading(angle) {
+  function updateUserHeading(rawAngle) {
+    var diff = shortestAngleDiff(navHeadingAngle, rawAngle);
+    var angle = navHeadingAngle + diff * NAV_HEADING_SMOOTH;
+    angle = ((angle % 360) + 360) % 360;
     navHeadingAngle = angle;
     if (navUserMarker) navUserMarker.setImage(buildUserMarkerImage(angle));
   }
 
   function handleDeviceOrientation(e) {
+    if (navHeadingSource === 'gps') return;
     var heading;
     if (typeof e.webkitCompassHeading === 'number') {
       heading = e.webkitCompassHeading;
@@ -1115,6 +1144,8 @@
     navDisplayPos = null;
     navLastFixTime = null;
     navHeadingAngle = 0;
+    navHeadingSource = 'compass';
+    navLastRawPos = null;
     document.getElementById('trackToggleBtn').classList.add('active');
     startHeadingTracking();
     navWatchId = navigator.geolocation.watchPosition(
@@ -1122,6 +1153,25 @@
         var newLat = pos.coords.latitude;
         var newLng = pos.coords.longitude;
         var now = Date.now();
+
+        // GPS 진행방향 계산: 이동 중일 때는 나침반 대신 실제 이동 방향을 사용해 흔들림을 줄임
+        if (navLastRawPos) {
+          var dist = haversineDistance(navLastRawPos.lat, navLastRawPos.lng, newLat, newLng);
+          var dt = (now - navLastRawPos.time) / 1000;
+          var speed = (typeof pos.coords.speed === 'number' && pos.coords.speed !== null && !isNaN(pos.coords.speed))
+            ? pos.coords.speed
+            : (dt > 0 ? dist / dt : 0);
+          if (speed > NAV_GPS_HEADING_SPEED && dist > 1.5) {
+            navHeadingSource = 'gps';
+            var bearing = (typeof pos.coords.heading === 'number' && pos.coords.heading !== null && !isNaN(pos.coords.heading))
+              ? pos.coords.heading
+              : calcBearing(navLastRawPos.lat, navLastRawPos.lng, newLat, newLng);
+            updateUserHeading(bearing);
+          } else {
+            navHeadingSource = 'compass';
+          }
+        }
+        navLastRawPos = { lat: newLat, lng: newLng, time: now };
 
         if (!navDisplayPos) {
           navDisplayPos = { lat: newLat, lng: newLng };
@@ -1156,6 +1206,8 @@
     navTrackingActive = false;
     navDisplayPos = null;
     navLastFixTime = null;
+    navHeadingSource = 'compass';
+    navLastRawPos = null;
     if (navUserMarker) { navUserMarker.setMap(null); navUserMarker = null; }
     document.getElementById('trackToggleBtn').classList.remove('active');
   }
@@ -2044,6 +2096,13 @@
     );
   }
 
+  function todayISO() {
+    var d = new Date();
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+
   function genPlaceId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
@@ -2131,10 +2190,11 @@
   }
 
   function showSavedPlaceInfo(marker, place, idx, addrText, shouldOpen) {
+    var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     infowindow.setContent(
       '<div style="position:relative;background:rgba(255,255,255,0.88);padding:8px 24px 8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
       '<a href="#" id="closeSavedPlaceInfoLink" style="position:absolute;top:4px;right:6px;color:#888;text-decoration:none;font-size:14px;line-height:1;">✕</a>' +
-      escapeHtml(place.name) +
+      escapeHtml(place.name) + dateLine +
       '<br>주소: ' + escapeHtml(addrText) +
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
       ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
@@ -2210,6 +2270,7 @@
     placeModalLng = p.lng;
     document.getElementById('placeModalTitle').textContent = '장소 수정';
     document.getElementById('placeModalName').value = p.name;
+    document.getElementById('placeModalDate').value = p.date || todayISO();
     document.getElementById('placeModalFolder').value = p.folderId || '';
     setPlaceModalIcon(p.icon || 'star');
     document.getElementById('placeModalDeleteBtn').style.display = 'block';
@@ -2223,6 +2284,7 @@
     placeModalOpenedFromList = false;
     document.getElementById('placeModalTitle').textContent = '장소 저장';
     document.getElementById('placeModalName').value = '';
+    document.getElementById('placeModalDate').value = todayISO();
     document.getElementById('placeModalFolder').value = '';
     setPlaceModalIcon('star');
     document.getElementById('placeModalDeleteBtn').style.display = 'none';
@@ -2261,10 +2323,11 @@
 
   document.getElementById('placeModalSaveBtn').addEventListener('click', function() {
     var name = document.getElementById('placeModalName').value.trim() || '이름없음';
+    var date = document.getElementById('placeModalDate').value || todayISO();
     var folderId = document.getElementById('placeModalFolder').value || null;
     var entry = {
       lat: placeModalLat, lng: placeModalLng, name: name,
-      icon: placeModalSelectedIcon, folderId: folderId,
+      icon: placeModalSelectedIcon, date: date, folderId: folderId,
       _id: (placeModalMode === 'edit' && savedPlaces[placeModalTargetIdx] && savedPlaces[placeModalTargetIdx]._id)
         || genPlaceId()
     };
