@@ -1040,16 +1040,21 @@
     }
   }
 
-  function buildUserMarkerImage(angle) {
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">' +
-      '<g transform="rotate(' + angle + ' 17 17)">' +
+  var navMarkerEl = null;
+
+  function buildUserMarkerEl() {
+    var el = document.createElement('div');
+    el.style.width = '34px';
+    el.style.height = '34px';
+    el.style.willChange = 'transform';
+    el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34" style="display:block;">' +
       '<path d="M17 3 L27 28 L17 21.5 L7 28 Z" fill="#4285F4" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>' +
-      '</g></svg>';
-    return new kakao.maps.MarkerImage(
-      'data:image/svg+xml;utf-8,' + encodeURIComponent(svg),
-      new kakao.maps.Size(34, 34),
-      { offset: new kakao.maps.Point(17, 17) }
-    );
+      '</svg>';
+    return el;
+  }
+
+  function applyNavMarkerRotation(angle) {
+    if (navMarkerEl) navMarkerEl.style.transform = 'rotate(' + angle + 'deg)';
   }
 
   function updateUserHeading(rawAngle) {
@@ -1057,7 +1062,7 @@
     var angle = navHeadingAngle + diff * NAV_HEADING_SMOOTH;
     angle = ((angle % 360) + 360) % 360;
     navHeadingAngle = angle;
-    if (navUserMarker) navUserMarker.setImage(buildUserMarkerImage(angle));
+    applyNavMarkerRotation(angle);
   }
 
   function handleDeviceOrientation(e) {
@@ -1098,11 +1103,16 @@
     if (navUserMarker) {
       navUserMarker.setPosition(here);
     } else {
-      navUserMarker = new kakao.maps.Marker({
+      navMarkerEl = buildUserMarkerEl();
+      navUserMarker = new kakao.maps.CustomOverlay({
         map: map,
         position: here,
-        image: buildUserMarkerImage(navHeadingAngle)
+        content: navMarkerEl,
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: 200
       });
+      applyNavMarkerRotation(navHeadingAngle);
     }
   }
 
@@ -1208,7 +1218,7 @@
     navLastFixTime = null;
     navHeadingSource = 'compass';
     navLastRawPos = null;
-    if (navUserMarker) { navUserMarker.setMap(null); navUserMarker = null; }
+    if (navUserMarker) { navUserMarker.setMap(null); navUserMarker = null; navMarkerEl = null; }
     document.getElementById('trackToggleBtn').classList.remove('active');
   }
 
