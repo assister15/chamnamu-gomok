@@ -1010,7 +1010,10 @@
   var navHeadingSource = 'compass'; // 'gps' 또는 'compass' — 이동 중엔 gps, 정지 시 compass
   var navLastRawPos = null; // GPS 진행방향 계산용 이전 원시 좌표
   var NAV_GPS_HEADING_SPEED = 0.6; // m/s — 이 속도 이상 움직일 때만 GPS 방향 사용
-  var NAV_HEADING_SMOOTH = 0.25; // 회전 스무딩 계수 (낮을수록 부드럽고 느림)
+  var NAV_HEADING_SMOOTH_GPS = 0.25; // GPS 진행방향 스무딩 계수
+  var NAV_HEADING_SMOOTH_COMPASS = 0.12; // 나침반 스무딩 계수 (더 강하게 눌러서 떨림 억제)
+  var navCompassBuffer = []; // 나침반 원시값 단기 평균용 버퍼
+  var NAV_COMPASS_WINDOW_MS = 350; // 이 시간 범위 안의 값들을 평균냄
 
   function shortestAngleDiff(a, b) {
     return ((b - a + 540) % 360) - 180;
@@ -1057,12 +1060,29 @@
     if (navMarkerEl) navMarkerEl.style.transform = 'rotate(' + angle + 'deg)';
   }
 
-  function updateUserHeading(rawAngle) {
+  function updateUserHeading(rawAngle, smoothFactor) {
+    var factor = (typeof smoothFactor === 'number') ? smoothFactor : NAV_HEADING_SMOOTH_GPS;
     var diff = shortestAngleDiff(navHeadingAngle, rawAngle);
-    var angle = navHeadingAngle + diff * NAV_HEADING_SMOOTH;
+    var angle = navHeadingAngle + diff * factor;
     angle = ((angle % 360) + 360) % 360;
     navHeadingAngle = angle;
     applyNavMarkerRotation(angle);
+  }
+
+  function pushCompassSample(rawAngle) {
+    var now = Date.now();
+    var rad = rawAngle * Math.PI / 180;
+    navCompassBuffer.push({ x: Math.cos(rad), y: Math.sin(rad), t: now });
+    while (navCompassBuffer.length && now - navCompassBuffer[0].t > NAV_COMPASS_WINDOW_MS) {
+      navCompassBuffer.shift();
+    }
+    var sx = 0, sy = 0;
+    for (var i = 0; i < navCompassBuffer.length; i++) {
+      sx += navCompassBuffer[i].x;
+      sy += navCompassBuffer[i].y;
+    }
+    var avgAngle = (Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360;
+    updateUserHeading(avgAngle, NAV_HEADING_SMOOTH_COMPASS);
   }
 
   function handleDeviceOrientation(e) {
@@ -1075,7 +1095,7 @@
     } else {
       return;
     }
-    updateUserHeading(heading);
+    pushCompassSample(heading);
   }
 
   function startHeadingTracking() {
@@ -1156,6 +1176,7 @@
     navHeadingAngle = 0;
     navHeadingSource = 'compass';
     navLastRawPos = null;
+    navCompassBuffer = [];
     document.getElementById('trackToggleBtn').classList.add('active');
     startHeadingTracking();
     navWatchId = navigator.geolocation.watchPosition(
@@ -1178,6 +1199,7 @@
               : calcBearing(navLastRawPos.lat, navLastRawPos.lng, newLat, newLng);
             updateUserHeading(bearing);
           } else {
+            if (navHeadingSource !== 'compass') navCompassBuffer = [];
             navHeadingSource = 'compass';
           }
         }
@@ -1218,6 +1240,7 @@
     navLastFixTime = null;
     navHeadingSource = 'compass';
     navLastRawPos = null;
+    navCompassBuffer = [];
     if (navUserMarker) { navUserMarker.setMap(null); navUserMarker = null; navMarkerEl = null; }
     document.getElementById('trackToggleBtn').classList.remove('active');
   }
