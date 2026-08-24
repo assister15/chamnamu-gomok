@@ -2640,6 +2640,25 @@
   });
 
   initGoogleLogin();
+
+  // ===== 화면 꺼짐 방지 (Wake Lock) =====
+  var wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', function() {
+        wakeLock = null;
+      });
+    } catch (e) {
+      // 권한 거부 등 실패 시 조용히 무시 (기능 자체는 필수 아님)
+    }
+  }
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
+  requestWakeLock();
+  // ===== 화면 꺼짐 방지 끝 =====
 </script>
 
 </body>
