@@ -980,7 +980,7 @@
   function loadWeatherBadge(lat, lng) {
     var badge = document.getElementById('weatherBadge');
     var moon = getMoonIllumination(new Date());
-    fetch('https://api.open-meteo.com/v1/kma?latitude=' + lat + '&longitude=' + lng + '&current_weather=true')
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng + '&current_weather=true')
       .then(function(res) { return res.json(); })
       .then(function(data) {
         var cw = data && data.current_weather;
