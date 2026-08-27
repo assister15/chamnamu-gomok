@@ -342,7 +342,7 @@
   #roadviewContainer { width:100%; height:100%; }
   #roadviewMinimap {
     position:absolute; right:12px; bottom:12px; z-index:5;
-    width:120px; height:120px; border-radius:8px; overflow:hidden;
+    width:150px; height:150px; border-radius:8px; overflow:hidden;
     border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.5);
   }
   #roadviewHeadingArrow {
@@ -1724,6 +1724,49 @@
   var roadviewMinimapMarker = null;
   var roadviewHistoryPushed = false;
 
+  var roadviewMinimapPolygons = [];
+
+  function clearRoadviewMinimapPolygons() {
+    roadviewMinimapPolygons.forEach(function(p) { p.setMap(null); });
+    roadviewMinimapPolygons = [];
+  }
+
+  function renderRoadviewMinimapPolygons() {
+    clearRoadviewMinimapPolygons();
+    if (!showPolygons || !roadviewMinimap) return;
+    if (allFeatures.length === 0) return;
+
+    var bounds = roadviewMinimap.getBounds();
+    var drawn = 0;
+
+    for (var i = 0; i < allFeatures.length; i++) {
+      if (drawn >= MAX_POLYGONS_ON_SCREEN) break;
+      var f = allFeatures[i];
+      if (!bboxIntersectsBounds(f.bbox, bounds)) continue;
+      if (!groupVisibility[paletteGroupOf(f.properties)]) continue;
+      if (!levelVisibility[gradeLevel(f.properties)]) continue;
+
+      f.coordsList.forEach(function(polyCoords) {
+        if (!polyCoords || !polyCoords[0] || polyCoords[0].length < 3) return;
+        var path = polyCoords
+          .filter(function(ring) { return ring && ring.length >= 3; })
+          .map(function(ring) { return ring.map(c => new kakao.maps.LatLng(c[1], c[0])); });
+        if (path.length === 0) return;
+        var polygon = new kakao.maps.Polygon({
+          map: roadviewMinimap,
+          path: path,
+          strokeWeight: 1,
+          strokeColor: '#4b1575',
+          strokeOpacity: 0.8,
+          fillColor: colorByGrade(f.properties),
+          fillOpacity: 0.45
+        });
+        roadviewMinimapPolygons.push(polygon);
+        drawn++;
+      });
+    }
+  }
+
   function toggleRoadviewMode() {
     var btn = document.getElementById('roadviewBtn');
     roadviewModeActive = !roadviewModeActive;
@@ -1764,6 +1807,7 @@
           var pos = roadview.getPosition();
           roadviewMinimap.setCenter(pos);
           roadviewMinimapMarker.setPosition(pos);
+          renderRoadviewMinimapPolygons();
         });
         kakao.maps.event.addListener(roadview, 'viewpoint_changed', function() {
           var vp = roadview.getViewpoint();
@@ -1777,12 +1821,14 @@
         roadview.relayout();
         roadviewMinimap.relayout();
         roadviewMinimap.setCenter(latlng);
+        renderRoadviewMinimapPolygons();
       }, 0);
     });
   }
 
   function closeRoadviewPanel() {
     document.getElementById('roadviewPanel').classList.remove('active');
+    clearRoadviewMinimapPolygons();
   }
 
   document.getElementById('roadviewCloseBtn').addEventListener('click', function() {
