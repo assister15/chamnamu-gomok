@@ -312,7 +312,7 @@
     float:right; background:none; border:none; font-size:18px;
     cursor:pointer; color:#888;
   }
-  #placeModalName, #placeModalDate, #placeModalFolder {
+  #placeModalName, #placeModalFolder {
     width:100%; box-sizing:border-box; padding:8px; font-size:14px;
     border:1px solid #ccc; border-radius:6px; margin-top:8px; font-family:inherit;
     background:#fff;
@@ -460,9 +460,20 @@
           <circle cx="13" cy="13" r="10" fill="url(#circGradPreview)" stroke="#a15c00" stroke-width="1.5"/>
         </svg>
       </button>
+      <button type="button" class="placeIconChoice" data-icon="car">
+        <svg width="26" height="26" viewBox="0 0 26 26">
+          <defs>
+            <radialGradient id="carGradPreview" cx="35%" cy="30%" r="75%">
+              <stop offset="0%" stop-color="#90caf9"/>
+              <stop offset="60%" stop-color="#1e88e5"/>
+              <stop offset="100%" stop-color="#0d47a1"/>
+            </radialGradient>
+          </defs>
+          <circle cx="13" cy="13" r="10" fill="url(#carGradPreview)" stroke="#0d3d75" stroke-width="1.5"/>
+          <text x="13" y="18" font-size="14" text-anchor="middle">🚗</text>
+        </svg>
+      </button>
     </div>
-    <label class="placeModalLabel">방문일</label>
-    <input type="date" id="placeModalDate">
     <label class="placeModalLabel">폴더 (선택)</label>
     <select id="placeModalFolder">
       <option value="">선택 안 함</option>
@@ -2154,14 +2165,24 @@
     '<path d="M9 9 L17 17 M17 9 L9 17" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>' +
     '</svg>';
 
+  var CAR_MARKER_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">' +
+    '<defs><radialGradient id="carGrad" cx="35%" cy="30%" r="75%">' +
+    '<stop offset="0%" stop-color="#90caf9"/><stop offset="60%" stop-color="#1e88e5"/><stop offset="100%" stop-color="#0d47a1"/>' +
+    '</radialGradient></defs>' +
+    '<circle cx="13" cy="13" r="10" fill="url(#carGrad)" stroke="#0d3d75" stroke-width="1.5"/>' +
+    '<text x="13" y="18" font-size="14" text-anchor="middle">🚗</text>' +
+    '</svg>';
+
   function svgForIcon(iconType) {
     if (iconType === 'circle') return CIRCLE_MARKER_SVG;
     if (iconType === 'x') return X_MARKER_SVG;
+    if (iconType === 'car') return CAR_MARKER_SVG;
     return STAR_MARKER_SVG;
   }
 
   function buildSavedPlaceMarkerImage(iconType) {
-    if (iconType === 'circle' || iconType === 'x') {
+    if (iconType === 'circle' || iconType === 'x' || iconType === 'car') {
       return new kakao.maps.MarkerImage(
         'data:image/svg+xml;utf-8,' + encodeURIComponent(svgForIcon(iconType)),
         new kakao.maps.Size(26, 26),
@@ -2173,13 +2194,6 @@
       new kakao.maps.Size(30, 32),
       { offset: new kakao.maps.Point(15, 16) }
     );
-  }
-
-  function todayISO() {
-    var d = new Date();
-    var mm = String(d.getMonth() + 1).padStart(2, '0');
-    var dd = String(d.getDate()).padStart(2, '0');
-    return d.getFullYear() + '-' + mm + '-' + dd;
   }
 
   function genPlaceId() {
@@ -2269,11 +2283,10 @@
   }
 
   function showSavedPlaceInfo(marker, place, idx, addrText, shouldOpen) {
-    var dateLine = place.date ? ('<br><span style="color:#888;font-size:11px;">방문일: ' + escapeHtml(place.date) + '</span>') : '';
     infowindow.setContent(
       '<div style="position:relative;background:rgba(255,255,255,0.88);padding:8px 24px 8px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;width:180px;box-sizing:border-box;white-space:normal;word-break:break-all;">' +
       '<a href="#" id="closeSavedPlaceInfoLink" style="position:absolute;top:4px;right:6px;color:#888;text-decoration:none;font-size:14px;line-height:1;">✕</a>' +
-      escapeHtml(place.name) + dateLine +
+      escapeHtml(place.name) +
       '<br>주소: ' + escapeHtml(addrText) +
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
       ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
@@ -2349,7 +2362,6 @@
     placeModalLng = p.lng;
     document.getElementById('placeModalTitle').textContent = '장소 수정';
     document.getElementById('placeModalName').value = p.name;
-    document.getElementById('placeModalDate').value = p.date || todayISO();
     document.getElementById('placeModalFolder').value = p.folderId || '';
     setPlaceModalIcon(p.icon || 'star');
     document.getElementById('placeModalDeleteBtn').style.display = 'block';
@@ -2363,7 +2375,6 @@
     placeModalOpenedFromList = false;
     document.getElementById('placeModalTitle').textContent = '장소 저장';
     document.getElementById('placeModalName').value = '';
-    document.getElementById('placeModalDate').value = todayISO();
     document.getElementById('placeModalFolder').value = '';
     setPlaceModalIcon('star');
     document.getElementById('placeModalDeleteBtn').style.display = 'none';
@@ -2402,11 +2413,10 @@
 
   document.getElementById('placeModalSaveBtn').addEventListener('click', function() {
     var name = document.getElementById('placeModalName').value.trim() || '이름없음';
-    var date = document.getElementById('placeModalDate').value || todayISO();
     var folderId = document.getElementById('placeModalFolder').value || null;
     var entry = {
       lat: placeModalLat, lng: placeModalLng, name: name,
-      icon: placeModalSelectedIcon, date: date, folderId: folderId,
+      icon: placeModalSelectedIcon, folderId: folderId,
       _id: (placeModalMode === 'edit' && savedPlaces[placeModalTargetIdx] && savedPlaces[placeModalTargetIdx]._id)
         || genPlaceId()
     };
