@@ -974,34 +974,125 @@
     return Math.round(illumination * 100);
   }
 
-  function weatherCodeToInfo(code) {
-    if (code === 0 || code === 1) return { icon: '☀️', label: '맑음' };
-    if (code === 2 || code === 3 || code === 45 || code === 48) return { icon: '☁️', label: '흐림' };
-    if (code != null && code >= 51) return { icon: '🌧️', label: '비' };
-    return { icon: '☁️', label: '흐림' };
+  var KMA_SERVICE_KEY = 'waTxFXnvA3WTnAwxSakX3MzYmvI8x%2BbChNMEnh1ynz1lTQ8nNIpAe4kzMC2KBUByhQhXMaUTWbcGMt0xAEVWTQ%3D%3D';
+
+  // 위경도 → 기상청 격자좌표(nx, ny) 변환 (LCC DFS 투영, 기상청 공식 공식)
+  function latLngToGrid(lat, lng) {
+    var RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136;
+    var DEGRAD = Math.PI / 180.0;
+    var re = RE / GRID;
+    var slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD;
+    var olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
+    var sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+    sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
+    var sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+    sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
+    var ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
+    ro = re * sf / Math.pow(ro, sn);
+    var ra = Math.tan(Math.PI * 0.25 + lat * DEGRAD * 0.5);
+    ra = re * sf / Math.pow(ra, sn);
+    var theta = lng * DEGRAD - olon;
+    if (theta > Math.PI) theta -= 2.0 * Math.PI;
+    if (theta < -Math.PI) theta += 2.0 * Math.PI;
+    theta *= sn;
+    return {
+      nx: Math.floor(ra * Math.sin(theta) + XO + 0.5),
+      ny: Math.floor(ro - ra * Math.cos(theta) + YO + 0.5)
+    };
+  }
+
+  function kmaDateTimeString(offsetHours, minuteStr) {
+    var d = new Date(Date.now() - offsetHours * 3600 * 1000);
+    var yyyy = d.getFullYear();
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    var hh = String(d.getHours()).padStart(2, '0');
+    return { date: '' + yyyy + mm + dd, time: hh + minuteStr };
+  }
+
+  function buildNcstUrl(nx, ny, offsetHours) {
+    var bt = kmaDateTimeString(offsetHours, '00');
+    return 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=' + KMA_SERVICE_KEY +
+      '&pageNo=1&numOfRows=20&dataType=JSON&base_date=' + bt.date + '&base_time=' + bt.time + '&nx=' + nx + '&ny=' + ny;
+  }
+
+  function buildFcstUrl(nx, ny, offsetHours) {
+    var bt = kmaDateTimeString(offsetHours, '30');
+    return 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=' + KMA_SERVICE_KEY +
+      '&pageNo=1&numOfRows=60&dataType=JSON&base_date=' + bt.date + '&base_time=' + bt.time + '&nx=' + nx + '&ny=' + ny;
+  }
+
+  // 발표시각 직후엔 자료가 아직 없을 수 있어, 실패하면 1~2시간 전 시각으로 재시도
+  async function fetchKmaItems(urlBuilder, nx, ny) {
+    for (var offset = 0; offset <= 2; offset++) {
+      try {
+        var res = await fetch(urlBuilder(nx, ny, offset));
+        var data = await res.json();
+        var header = data && data.response && data.response.header;
+        var items = data && data.response && data.response.body && data.response.body.items && data.response.body.items.item;
+        if (header && header.resultCode === '00' && items && items.length > 0) {
+          return items;
+        }
+      } catch (e) { /* 다음 offset으로 재시도 */ }
+    }
+    return null;
+  }
+
+  function ptyToInfo(pty) {
+    switch (String(pty)) {
+      case '1': return { icon: '🌧️', label: '비' };
+      case '2': return { icon: '🌨️', label: '비/눈' };
+      case '3': return { icon: '❄️', label: '눈' };
+      case '4': return { icon: '🌦️', label: '소나기' };
+      case '5': return { icon: '🌧️', label: '빗방울' };
+      case '6': return { icon: '🌨️', label: '빗방울눈날림' };
+      case '7': return { icon: '🌨️', label: '눈날림' };
+      default: return null; // 0(없음) 또는 값 없음 → 강수 없음
+    }
+  }
+
+  function skyToInfo(sky) {
+    switch (String(sky)) {
+      case '1': return { icon: '☀️', label: '맑음' };
+      case '3': return { icon: '⛅', label: '구름많음' };
+      case '4': return { icon: '☁️', label: '흐림' };
+      default: return { icon: '☁️', label: '흐림' };
+    }
   }
 
   var WEATHER_LINK_HTML = '<a href="https://www.weather.go.kr/w/index.do" target="_blank" rel="noopener" title="기상청 날씨누리">→</a>';
 
-  function loadWeatherBadge(lat, lng) {
+  async function loadWeatherBadge(lat, lng) {
     var badge = document.getElementById('weatherBadge');
     var moon = getMoonIllumination(new Date());
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng + '&current_weather=true')
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        var cw = data && data.current_weather;
-        var temp = cw ? Math.round(cw.temperature) : null;
-        var wInfo = weatherCodeToInfo(cw ? cw.weathercode : null);
-        var text = (temp !== null) ? ('🌡️ ' + temp + '°C') : '';
-        badge.innerHTML =
-          (text ? '<span>' + text + '</span>' : '') +
-          '<span>🌙 ' + moon + '%</span>' +
-          '<span>' + wInfo.icon + ' ' + wInfo.label + '</span>' +
-          WEATHER_LINK_HTML;
-      })
-      .catch(function() {
-        badge.innerHTML = '<span>🌙 ' + moon + '%</span>' + WEATHER_LINK_HTML;
-      });
+    var grid = latLngToGrid(lat, lng);
+    try {
+      var ncstItems = await fetchKmaItems(buildNcstUrl, grid.nx, grid.ny);
+      var fcstItems = await fetchKmaItems(buildFcstUrl, grid.nx, grid.ny);
+
+      var ncstMap = {};
+      (ncstItems || []).forEach(function(it) { ncstMap[it.category] = it.obsrValue; });
+      var temp = (ncstMap.T1H !== undefined) ? Math.round(parseFloat(ncstMap.T1H)) : null;
+
+      var sky = null;
+      if (fcstItems && fcstItems.length > 0) {
+        var earliestTime = fcstItems.reduce(function(min, it) {
+          return (min === null || it.fcstTime < min) ? it.fcstTime : min;
+        }, null);
+        var skyItem = fcstItems.find(function(it) { return it.category === 'SKY' && it.fcstTime === earliestTime; });
+        sky = skyItem ? skyItem.fcstValue : null;
+      }
+
+      var wInfo = ptyToInfo(ncstMap.PTY) || skyToInfo(sky);
+      var text = (temp !== null) ? ('🌡️ ' + temp + '°C') : '';
+      badge.innerHTML =
+        (text ? '<span>' + text + '</span>' : '') +
+        '<span>🌙 ' + moon + '%</span>' +
+        '<span>' + wInfo.icon + ' ' + wInfo.label + '</span>' +
+        WEATHER_LINK_HTML;
+    } catch (e) {
+      badge.innerHTML = '<span>🌙 ' + moon + '%</span>' + WEATHER_LINK_HTML;
+    }
   }
   // ===== 기온/월광/날씨 배지 끝 =====
 
