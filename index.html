@@ -657,6 +657,9 @@
     loadWeatherBadge(savedView.lat, savedView.lng);
   }
 
+  var weatherIdleTimer = null;
+  var lastWeatherLat = null, lastWeatherLng = null;
+
   kakao.maps.event.addListener(map, 'idle', function() {
     try {
       var center = map.getCenter();
@@ -666,6 +669,21 @@
         level: map.getLevel()
       }));
     } catch (e) {}
+
+    // 지도 중심이 멈춘 위치의 날씨를 자동 갱신 (연속 이동 중엔 디바운스, 기상청 격자 해상도(5km) 안에서는 스킵)
+    clearTimeout(weatherIdleTimer);
+    weatherIdleTimer = setTimeout(function() {
+      var c = map.getCenter();
+      var lat = c.getLat(), lng = c.getLng();
+      if (lastWeatherLat !== null &&
+          Math.abs(lat - lastWeatherLat) < 0.03 &&
+          Math.abs(lng - lastWeatherLng) < 0.03) {
+        return;
+      }
+      lastWeatherLat = lat;
+      lastWeatherLng = lng;
+      loadWeatherBadge(lat, lng);
+    }, 500);
   });
 
   var ps = new kakao.maps.services.Places();
