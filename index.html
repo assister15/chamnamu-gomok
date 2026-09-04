@@ -250,6 +250,10 @@
     flex-shrink:0; border:none; background:#f2f2f2; border-radius:6px;
     width:28px; height:28px; font-size:14px; color:#555; cursor:pointer;
   }
+  .savedListItem.dragging, .savedListFolderRow.dragging {
+    opacity:0.55; background:#f5f0ff; box-shadow:0 4px 10px rgba(0,0,0,0.2);
+    transform:scale(1.02);
+  }
 
   #folderHeaderRow {
     display:flex; align-items:center; justify-content:space-between;
@@ -802,6 +806,108 @@
     }
   }
 
+  // ===== 저장목록 드래그 재정렬 (롱프레스 후 드래그) =====
+  var suppressNextClick = false;
+  var LONG_PRESS_MS = 450;
+  var DRAG_MOVE_CANCEL_PX = 10;
+
+  function attachLongPressDrag(rowEl, meta) {
+    var pressTimer = null;
+    var startY = 0, startX = 0;
+    var dragging = false;
+
+    rowEl.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      if (e.target.closest && e.target.closest('.noDragTarget')) return;
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      dragging = false;
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(function() {
+        dragging = true;
+        rowEl.classList.add('dragging');
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+
+    rowEl.addEventListener('touchmove', function(e) {
+      if (e.touches.length !== 1) return;
+      var dy = e.touches[0].clientY - startY;
+      var dx = e.touches[0].clientX - startX;
+      if (!dragging) {
+        if (Math.abs(dy) > DRAG_MOVE_CANCEL_PX || Math.abs(dx) > DRAG_MOVE_CANCEL_PX) {
+          clearTimeout(pressTimer);
+        }
+        return;
+      }
+      e.preventDefault();
+      var touchY = e.touches[0].clientY;
+      var container = rowEl.parentElement;
+      if (!container) return;
+      var siblings = Array.prototype.slice.call(container.children).filter(function(el) {
+        return el.dataset && el.dataset.dragKind === meta.kind;
+      });
+      for (var i = 0; i < siblings.length; i++) {
+        var sib = siblings[i];
+        if (sib === rowEl) continue;
+        var rect = sib.getBoundingClientRect();
+        var mid = rect.top + rect.height / 2;
+        var rowIsAfterSib = !!(sib.compareDocumentPosition(rowEl) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (touchY < mid && rowIsAfterSib) {
+          container.insertBefore(rowEl, sib);
+          break;
+        } else if (touchY > mid && !rowIsAfterSib) {
+          container.insertBefore(rowEl, sib.nextSibling);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    rowEl.addEventListener('touchend', function() {
+      clearTimeout(pressTimer);
+      if (dragging) {
+        dragging = false;
+        rowEl.classList.remove('dragging');
+        suppressNextClick = true;
+        commitReorder(meta.kind);
+      }
+    });
+
+    rowEl.addEventListener('touchcancel', function() {
+      clearTimeout(pressTimer);
+      if (dragging) {
+        dragging = false;
+        rowEl.classList.remove('dragging');
+      }
+    });
+  }
+
+  function commitReorder(kind) {
+    var container = document.getElementById('savedListItems');
+    var rows = Array.prototype.slice.call(container.children).filter(function(el) {
+      return el.dataset && el.dataset.dragKind === kind;
+    });
+    var newIds = rows.map(function(el) { return el.dataset.dragId; });
+
+    if (kind === 'folder') {
+      savedFolders.sort(function(a, b) {
+        return newIds.indexOf(a._id) - newIds.indexOf(b._id);
+      });
+      persistSavedFolders();
+    } else if (kind === 'place') {
+      var visibleIdSet = {};
+      newIds.forEach(function(id) { visibleIdSet[id] = true; });
+      var others = savedPlaces.filter(function(p) { return !visibleIdSet[p._id]; });
+      var reordered = newIds
+        .map(function(id) { return savedPlaces.find(function(p) { return p._id === id; }); })
+        .filter(Boolean);
+      savedPlaces = others.concat(reordered);
+      persistSavedPlaces();
+    }
+    renderSavedListItems();
+  }
+  // ===== 저장목록 드래그 재정렬 끝 =====
+
   function renderSavedListItems() {
     var itemsEl = document.getElementById('savedListItems');
     itemsEl.innerHTML = '';
@@ -825,17 +931,21 @@
         hasAnyContent = true;
         var folderRow = document.createElement('div');
         folderRow.className = 'savedListFolderRow';
+        folderRow.dataset.dragKind = 'folder';
+        folderRow.dataset.dragId = folder._id;
         folderRow.innerHTML = '<span>📁</span><span>' + escapeHtml(folder.name) + '</span>';
         var countSpan = document.createElement('span');
         countSpan.className = 'folderCount';
         countSpan.textContent = count + '개';
         folderRow.appendChild(countSpan);
         folderRow.addEventListener('click', function() {
+          if (suppressNextClick) { suppressNextClick = false; return; }
           savedNavStack.push({ type: 'folder', folderId: folder._id });
           history.pushState({ savedNav: savedNavStack.length }, '');
           currentFolderId = folder._id;
           renderSavedListItems();
         });
+        attachLongPressDrag(folderRow, { kind: 'folder', id: folder._id });
         itemsEl.appendChild(folderRow);
       });
     }
@@ -854,6 +964,8 @@
       var idx = entry.idx;
       var row = document.createElement('div');
       row.className = 'savedListItem';
+      row.dataset.dragKind = 'place';
+      row.dataset.dragId = place._id;
 
       var mainDiv = document.createElement('div');
       mainDiv.className = 'savedListItemMain';
@@ -876,7 +988,7 @@
       row.appendChild(mainDiv);
 
       var editBtn = document.createElement('button');
-      editBtn.className = 'savedListEditBtn';
+      editBtn.className = 'savedListEditBtn noDragTarget';
       editBtn.textContent = '✏️';
       editBtn.title = '수정';
       editBtn.addEventListener('click', function(e) {
@@ -891,11 +1003,13 @@
       row.appendChild(editBtn);
 
       row.addEventListener('click', function() {
+        if (suppressNextClick) { suppressNextClick = false; return; }
         // 목록에서 자리 하나를 골라 지도로 이동하는 건 "뒤로 한 단계"가 아니라
         // 목록 관련 이동 기록을 전부 접고 지도로 나가는 것 — X버튼과 동일하게 처리
         closeSavedListEntirely();
         goToMapTarget(new kakao.maps.LatLng(place.lat, place.lng), 4);
       });
+      attachLongPressDrag(row, { kind: 'place', id: place._id });
       itemsEl.appendChild(row);
 
       getShortAddress(place.lat, place.lng, function(addr) {
