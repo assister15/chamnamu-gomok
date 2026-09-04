@@ -205,6 +205,21 @@
     margin-left:2px;
   }
 
+  #routeStatusBar {
+    position:fixed; bottom:56px; left:12px; z-index:15;
+    background:#fff; padding:8px 10px; border-radius:10px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25); font-size:12px; color:#333;
+    display:none; max-width:220px; box-sizing:border-box;
+  }
+  #routeStatusBar.show { display:block; }
+  #routeStatusBar .routeLine { margin-bottom:4px; word-break:break-all; }
+  #routeStatusBar .routeActions { display:flex; gap:8px; margin-top:6px; }
+  #routeStatusBar button {
+    border:none; border-radius:6px; padding:6px 8px; font-size:12px; cursor:pointer;
+  }
+  #routeGoBtn { background:#4b1575; color:#fff; flex:1; }
+  #routeClearBtn { background:#eee; color:#555; }
+
   #savedListOverlay {
     position:fixed; top:0; left:0; width:100%; height:100%;
     background:rgba(0,0,0,0.4); z-index:60;
@@ -403,6 +418,7 @@
   </svg>
 </button>
 <div id="weatherBadge"></div>
+<div id="routeStatusBar"></div>
 <div id="savedListOverlay">
   <div id="savedListPanel">
     <button id="savedListCloseBtn">✕</button>
@@ -2392,7 +2408,9 @@
       escapeHtml(place.name) +
       '<br>주소: ' + escapeHtml(addrText) +
       '<br><a href="#" id="editSavedPlaceLink" style="color:#4b1575;text-decoration:underline;">편집</a>' +
-      ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a></div>'
+      ' · <a href="#" id="deleteSavedPlaceLink" style="color:#c0392b;text-decoration:underline;">삭제</a>' +
+      '<br><a href="#" id="setStartLink" style="color:#1565c0;text-decoration:underline;">출발로 설정</a>' +
+      ' · <a href="#" id="setEndLink" style="color:#c0392b;text-decoration:underline;">도착으로 설정</a></div>'
     );
     // shouldOpen이 false인 경우(주소 조회가 끝나 내용만 갱신하는 경우)는
     // open()을 다시 부르지 않음 — 이미 닫혀있던 말풍선이 되살아나는 걸 방지.
@@ -2427,10 +2445,74 @@
           infowindow.close();
         });
       }
+      var setStartLink = document.getElementById('setStartLink');
+      if (setStartLink) {
+        setStartLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          setRoutePoint('start', { name: place.name, lat: place.lat, lng: place.lng });
+          infowindow.close();
+        });
+      }
+      var setEndLink = document.getElementById('setEndLink');
+      if (setEndLink) {
+        setEndLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          setRoutePoint('end', { name: place.name, lat: place.lat, lng: place.lng });
+          infowindow.close();
+        });
+      }
     }, 0);
   }
 
-  // ===== 저장/편집 모달 =====
+  // ===== 카카오맵 연동 길찾기(출발/도착 지정) =====
+  var routeStart = null; // { name, lat, lng }
+  var routeEnd = null;
+
+  function setRoutePoint(role, point) {
+    if (role === 'start') routeStart = point;
+    else routeEnd = point;
+    renderRouteStatusBar();
+  }
+
+  function clearRoute() {
+    routeStart = null;
+    routeEnd = null;
+    renderRouteStatusBar();
+  }
+
+  function openKakaoRoute() {
+    if (!routeStart || !routeEnd) return;
+    var url = 'https://map.kakao.com/link/from/' +
+      encodeURIComponent(routeStart.name) + ',' + routeStart.lat + ',' + routeStart.lng +
+      '/to/' + encodeURIComponent(routeEnd.name) + ',' + routeEnd.lat + ',' + routeEnd.lng;
+    window.open(url, '_blank');
+  }
+
+  function renderRouteStatusBar() {
+    var bar = document.getElementById('routeStatusBar');
+    if (!routeStart && !routeEnd) {
+      bar.classList.remove('show');
+      bar.innerHTML = '';
+      return;
+    }
+    var html = '';
+    html += '<div class="routeLine">🔵 출발: ' + (routeStart ? escapeHtml(routeStart.name) : '<span style="color:#aaa;">미지정</span>') + '</div>';
+    html += '<div class="routeLine">🔴 도착: ' + (routeEnd ? escapeHtml(routeEnd.name) : '<span style="color:#aaa;">미지정</span>') + '</div>';
+    html += '<div class="routeActions">';
+    if (routeStart && routeEnd) {
+      html += '<button id="routeGoBtn">🚗 카카오맵으로 길찾기</button>';
+    }
+    html += '<button id="routeClearBtn">초기화</button>';
+    html += '</div>';
+    bar.innerHTML = html;
+    bar.classList.add('show');
+
+    var goBtn = document.getElementById('routeGoBtn');
+    if (goBtn) goBtn.addEventListener('click', openKakaoRoute);
+    var clearBtn = document.getElementById('routeClearBtn');
+    if (clearBtn) clearBtn.addEventListener('click', clearRoute);
+  }
+  // ===== 카카오맵 연동 길찾기 끝 =====
   var placeModalMode = 'create';
   var placeModalTargetIdx = null;
   var placeModalLat = null;
