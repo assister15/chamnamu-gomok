@@ -256,8 +256,11 @@
   }
   .savedListItem, .savedListFolderRow {
     -webkit-user-select:none; user-select:none;
-    -webkit-touch-callout:none;
-    touch-action:none;
+  }
+  .dragHandle {
+    flex-shrink:0; width:28px; height:34px; display:flex; align-items:center;
+    justify-content:center; touch-action:none;
+    cursor:grab;
   }
 
   #folderHeaderRow {
@@ -811,59 +814,24 @@
     }
   }
 
-  // ===== 저장목록 드래그 재정렬 (롱프레스 후 드래그) =====
+  // ===== 저장목록 드래그 재정렬 (전용 손잡이를 눌러 바로 드래그) =====
   var suppressNextClick = false;
-  var LONG_PRESS_MS = 450;
-  var DRAG_MOVE_CANCEL_PX = 10;
 
-  function attachLongPressDrag(rowEl, meta) {
-    var pressTimer = null;
-    var startY = 0, startX = 0;
-    var lastY = 0;
+  function attachDragHandle(handleEl, rowEl, meta) {
     var dragging = false;
-    var scrolling = false;
 
-    rowEl.addEventListener('touchstart', function(e) {
+    handleEl.addEventListener('touchstart', function(e) {
       if (e.touches.length !== 1) return;
-      if (e.target.closest && e.target.closest('.noDragTarget')) return;
-      startY = e.touches[0].clientY;
-      startX = e.touches[0].clientX;
-      lastY = startY;
-      dragging = false;
-      scrolling = false;
-      clearTimeout(pressTimer);
-      pressTimer = setTimeout(function() {
-        dragging = true;
-        rowEl.classList.add('dragging');
-        if (navigator.vibrate) navigator.vibrate(15);
-      }, LONG_PRESS_MS);
-    }, { passive: true });
-
-    rowEl.addEventListener('touchmove', function(e) {
-      if (e.touches.length !== 1) return;
-      var curY = e.touches[0].clientY;
-      var dy = curY - startY;
-      var dx = e.touches[0].clientX - startX;
-
-      if (!dragging) {
-        // 아직 롱프레스가 완성되기 전 — 손가락이 움직이면 스크롤 의도로 보고
-        // (네이티브 스크롤을 껐으므로) 목록을 직접 스크롤시켜준다.
-        if (!scrolling && (Math.abs(dy) > DRAG_MOVE_CANCEL_PX || Math.abs(dx) > DRAG_MOVE_CANCEL_PX)) {
-          clearTimeout(pressTimer);
-          scrolling = true;
-        }
-        if (scrolling) {
-          e.preventDefault();
-          var panel = document.getElementById('savedListPanel');
-          if (panel) panel.scrollTop -= (curY - lastY);
-        }
-        lastY = curY;
-        return;
-      }
-
       e.preventDefault();
-      lastY = curY;
-      var touchY = curY;
+      dragging = true;
+      rowEl.classList.add('dragging');
+      if (navigator.vibrate) navigator.vibrate(15);
+    }, { passive: false });
+
+    handleEl.addEventListener('touchmove', function(e) {
+      if (!dragging || e.touches.length !== 1) return;
+      e.preventDefault();
+      var touchY = e.touches[0].clientY;
       var container = rowEl.parentElement;
       if (!container) return;
       var siblings = Array.prototype.slice.call(container.children).filter(function(el) {
@@ -885,25 +853,16 @@
       }
     }, { passive: false });
 
-    rowEl.addEventListener('touchend', function() {
-      clearTimeout(pressTimer);
-      scrolling = false;
+    function endDrag() {
       if (dragging) {
         dragging = false;
         rowEl.classList.remove('dragging');
         suppressNextClick = true;
         commitReorder(meta.kind);
       }
-    });
-
-    rowEl.addEventListener('touchcancel', function() {
-      clearTimeout(pressTimer);
-      scrolling = false;
-      if (dragging) {
-        dragging = false;
-        rowEl.classList.remove('dragging');
-      }
-    });
+    }
+    handleEl.addEventListener('touchend', endDrag);
+    handleEl.addEventListener('touchcancel', endDrag);
   }
 
   function commitReorder(kind) {
@@ -962,6 +921,10 @@
         countSpan.className = 'folderCount';
         countSpan.textContent = count + '개';
         folderRow.appendChild(countSpan);
+        var folderHandle = document.createElement('span');
+        folderHandle.className = 'dragHandle';
+        folderHandle.innerHTML = '<svg width="14" height="22" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 L20 12 L4 12 Z" fill="#aaa"/><path d="M12 34 L20 24 L4 24 Z" fill="#aaa"/></svg>';
+        folderRow.appendChild(folderHandle);
         folderRow.addEventListener('click', function() {
           if (suppressNextClick) { suppressNextClick = false; return; }
           savedNavStack.push({ type: 'folder', folderId: folder._id });
@@ -969,7 +932,7 @@
           currentFolderId = folder._id;
           renderSavedListItems();
         });
-        attachLongPressDrag(folderRow, { kind: 'folder', id: folder._id });
+        attachDragHandle(folderHandle, folderRow, { kind: 'folder', id: folder._id });
         itemsEl.appendChild(folderRow);
       });
     }
@@ -1026,6 +989,11 @@
       });
       row.appendChild(editBtn);
 
+      var placeHandle = document.createElement('span');
+      placeHandle.className = 'dragHandle';
+      placeHandle.innerHTML = '<svg width="14" height="22" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 L20 12 L4 12 Z" fill="#aaa"/><path d="M12 34 L20 24 L4 24 Z" fill="#aaa"/></svg>';
+      row.appendChild(placeHandle);
+
       row.addEventListener('click', function() {
         if (suppressNextClick) { suppressNextClick = false; return; }
         // 목록에서 자리 하나를 골라 지도로 이동하는 건 "뒤로 한 단계"가 아니라
@@ -1033,7 +1001,7 @@
         closeSavedListEntirely();
         goToMapTarget(new kakao.maps.LatLng(place.lat, place.lng), 4);
       });
-      attachLongPressDrag(row, { kind: 'place', id: place._id });
+      attachDragHandle(placeHandle, row, { kind: 'place', id: place._id });
       itemsEl.appendChild(row);
 
       getShortAddress(place.lat, place.lng, function(addr) {
