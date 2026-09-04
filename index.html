@@ -257,7 +257,7 @@
   .savedListItem, .savedListFolderRow {
     -webkit-user-select:none; user-select:none;
     -webkit-touch-callout:none;
-    touch-action:pan-y;
+    touch-action:none;
   }
 
   #folderHeaderRow {
@@ -819,14 +819,18 @@
   function attachLongPressDrag(rowEl, meta) {
     var pressTimer = null;
     var startY = 0, startX = 0;
+    var lastY = 0;
     var dragging = false;
+    var scrolling = false;
 
     rowEl.addEventListener('touchstart', function(e) {
       if (e.touches.length !== 1) return;
       if (e.target.closest && e.target.closest('.noDragTarget')) return;
       startY = e.touches[0].clientY;
       startX = e.touches[0].clientX;
+      lastY = startY;
       dragging = false;
+      scrolling = false;
       clearTimeout(pressTimer);
       pressTimer = setTimeout(function() {
         dragging = true;
@@ -837,16 +841,29 @@
 
     rowEl.addEventListener('touchmove', function(e) {
       if (e.touches.length !== 1) return;
-      var dy = e.touches[0].clientY - startY;
+      var curY = e.touches[0].clientY;
+      var dy = curY - startY;
       var dx = e.touches[0].clientX - startX;
+
       if (!dragging) {
-        if (Math.abs(dy) > DRAG_MOVE_CANCEL_PX || Math.abs(dx) > DRAG_MOVE_CANCEL_PX) {
+        // 아직 롱프레스가 완성되기 전 — 손가락이 움직이면 스크롤 의도로 보고
+        // (네이티브 스크롤을 껐으므로) 목록을 직접 스크롤시켜준다.
+        if (!scrolling && (Math.abs(dy) > DRAG_MOVE_CANCEL_PX || Math.abs(dx) > DRAG_MOVE_CANCEL_PX)) {
           clearTimeout(pressTimer);
+          scrolling = true;
         }
+        if (scrolling) {
+          e.preventDefault();
+          var panel = document.getElementById('savedListPanel');
+          if (panel) panel.scrollTop -= (curY - lastY);
+        }
+        lastY = curY;
         return;
       }
+
       e.preventDefault();
-      var touchY = e.touches[0].clientY;
+      lastY = curY;
+      var touchY = curY;
       var container = rowEl.parentElement;
       if (!container) return;
       var siblings = Array.prototype.slice.call(container.children).filter(function(el) {
@@ -870,6 +887,7 @@
 
     rowEl.addEventListener('touchend', function() {
       clearTimeout(pressTimer);
+      scrolling = false;
       if (dragging) {
         dragging = false;
         rowEl.classList.remove('dragging');
@@ -880,6 +898,7 @@
 
     rowEl.addEventListener('touchcancel', function() {
       clearTimeout(pressTimer);
+      scrolling = false;
       if (dragging) {
         dragging = false;
         rowEl.classList.remove('dragging');
