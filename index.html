@@ -2170,6 +2170,9 @@
     } else if (roadviewHistoryPushed) {
       roadviewHistoryPushed = false;
       closeRoadviewPanel();
+    } else if (infoModalHistoryPushed) {
+      infoModalHistoryPushed = false;
+      document.getElementById('infoModalOverlay').classList.remove('show');
     }
   });
 
@@ -3089,14 +3092,22 @@
   // ===== 화면 꺼짐 방지 끝 =====
 
   // ===== 지도 소개 정보 모달 =====
+  var infoModalHistoryPushed = false;
   document.getElementById('infoBtn').addEventListener('click', function() {
     document.getElementById('infoModalOverlay').classList.add('show');
+    infoModalHistoryPushed = true;
+    history.pushState({ infoModal: true }, '');
   });
-  document.getElementById('infoModalCloseBtn').addEventListener('click', function() {
+  function closeInfoModal() {
     document.getElementById('infoModalOverlay').classList.remove('show');
-  });
+    if (infoModalHistoryPushed) {
+      infoModalHistoryPushed = false;
+      history.back();
+    }
+  }
+  document.getElementById('infoModalCloseBtn').addEventListener('click', closeInfoModal);
   document.getElementById('infoModalOverlay').addEventListener('click', function(e) {
-    if (e.target === this) this.classList.remove('show');
+    if (e.target === this) closeInfoModal();
   });
   // ===== 지도 소개 정보 모달 끝 =====
 </script>
