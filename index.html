@@ -820,18 +820,7 @@
   function attachDragHandle(handleEl, rowEl, meta) {
     var dragging = false;
 
-    handleEl.addEventListener('touchstart', function(e) {
-      if (e.touches.length !== 1) return;
-      e.preventDefault();
-      dragging = true;
-      rowEl.classList.add('dragging');
-      if (navigator.vibrate) navigator.vibrate(15);
-    }, { passive: false });
-
-    handleEl.addEventListener('touchmove', function(e) {
-      if (!dragging || e.touches.length !== 1) return;
-      e.preventDefault();
-      var touchY = e.touches[0].clientY;
+    function moveTo(clientY) {
       var container = rowEl.parentElement;
       if (!container) return;
       var siblings = Array.prototype.slice.call(container.children).filter(function(el) {
@@ -843,15 +832,21 @@
         var rect = sib.getBoundingClientRect();
         var mid = rect.top + rect.height / 2;
         var rowIsAfterSib = !!(sib.compareDocumentPosition(rowEl) & Node.DOCUMENT_POSITION_FOLLOWING);
-        if (touchY < mid && rowIsAfterSib) {
+        if (clientY < mid && rowIsAfterSib) {
           container.insertBefore(rowEl, sib);
           break;
-        } else if (touchY > mid && !rowIsAfterSib) {
+        } else if (clientY > mid && !rowIsAfterSib) {
           container.insertBefore(rowEl, sib.nextSibling);
           break;
         }
       }
-    }, { passive: false });
+    }
+
+    function startDrag() {
+      dragging = true;
+      rowEl.classList.add('dragging');
+      if (navigator.vibrate) navigator.vibrate(15);
+    }
 
     function endDrag() {
       if (dragging) {
@@ -861,8 +856,39 @@
         commitReorder(meta.kind);
       }
     }
+
+    // 모바일(터치)
+    handleEl.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      startDrag();
+    }, { passive: false });
+
+    handleEl.addEventListener('touchmove', function(e) {
+      if (!dragging || e.touches.length !== 1) return;
+      e.preventDefault();
+      moveTo(e.touches[0].clientY);
+    }, { passive: false });
+
     handleEl.addEventListener('touchend', endDrag);
     handleEl.addEventListener('touchcancel', endDrag);
+
+    // PC(마우스)
+    handleEl.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      startDrag();
+
+      function onMouseMove(ev) {
+        moveTo(ev.clientY);
+      }
+      function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        endDrag();
+      }
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
   }
 
   function commitReorder(kind) {
