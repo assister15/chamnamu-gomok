@@ -2176,6 +2176,9 @@
     } else if (infoModalHistoryPushed) {
       infoModalHistoryPushed = false;
       document.getElementById('infoModalOverlay').classList.remove('show');
+    } else if (groupSettingsHistoryPushed) {
+      groupSettingsHistoryPushed = false;
+      document.getElementById('groupSettingsOverlay').classList.remove('open');
     }
   });
 
@@ -2265,11 +2268,18 @@
     });
   })();
 
+  var groupSettingsHistoryPushed = false;
   function openGroupSettingsPanel() {
     document.getElementById('groupSettingsOverlay').classList.add('open');
+    groupSettingsHistoryPushed = true;
+    history.pushState({ groupSettings: true }, '');
   }
   function closeGroupSettingsPanel() {
     document.getElementById('groupSettingsOverlay').classList.remove('open');
+    if (groupSettingsHistoryPushed) {
+      groupSettingsHistoryPushed = false;
+      history.back();
+    }
   }
 
   ['oak', 'mixed', 'other'].forEach(function(key) {
