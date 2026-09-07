@@ -572,7 +572,7 @@
       <li><b>로드뷰</b> — 검색 결과나 저장 장소의 말풍선에서 로드뷰 버튼을 누르면 거리뷰 화면이 열리고, 우측 하단 미니맵에 주변 숲 폴리곤도 함께 표시됩니다.</li>
       <li><b>실시간 위치 추적</b> — 우측 상단 화살표 버튼을 누르면 GPS로 내 위치와 이동 방향(화살표)이 실시간으로 표시됩니다.</li>
       <li><b>실시간 날씨</b> — 좌측 하단에 기상청 실측 데이터 기반 기온·하늘상태가 표시되고, 지도를 3km 이상 옮기면 그 지역 날씨로 자동 갱신됩니다.</li>
-      <li><b>카카오맵 길찾기</b> — 저장 장소 말풍선에서 "출발로 설정"과 "도착으로 설정"을 각각 눌러 두 곳을 지정하면, 화면에 뜨는 "카카오맵으로 길찾기" 버튼으로 실제 자동차 소요시간을 확인할 수 있습니다.</li>
+      <li><b>카카오맵 길찾기</b> — 저장 장소든 검색 결과로 찍힌 마커든, 말풍선에서 "출발로 설정"과 "도착으로 설정"을 각각 눌러 두 곳을 지정하면, 화면에 뜨는 "카카오맵으로 길찾기" 버튼으로 실제 자동차 소요시간을 확인할 수 있습니다.</li>
       <li><b>저장목록 순서 변경</b> — 저장한 장소 목록에서 항목 옆 ↕ 손잡이를 누른 채 위아래로 끌면 순서를 바꿀 수 있습니다.</li>
       <li><b>구글 로그인 동기화</b> — 우측의 G 아이콘으로 로그인하면 저장한 장소를 여러 기기에서 함께 사용할 수 있습니다.</li>
     </ul>
@@ -1744,9 +1744,29 @@
         // 저장장소 마커와 동일한 이유로 suppressNextMapClick 불필요(clickable:true가 처리함)
         infowindow.setContent(
           '<div style="background:rgba(255,255,255,0.88);padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:13px;max-width:220px;">' +
-          item.title + '</div>'
+          escapeHtml(item.title) +
+          '<br><a href="#" id="searchSetStartLink" style="color:#1565c0;text-decoration:underline;">출발로 설정</a>' +
+          ' · <a href="#" id="searchSetEndLink" style="color:#c0392b;text-decoration:underline;">도착으로 설정</a></div>'
         );
         infowindow.open(map, marker);
+        setTimeout(function() {
+          var setStartLink = document.getElementById('searchSetStartLink');
+          if (setStartLink) {
+            setStartLink.addEventListener('click', function(e) {
+              e.preventDefault();
+              setRoutePoint('start', { name: item.title, lat: pos.getLat(), lng: pos.getLng() });
+              infowindow.close();
+            });
+          }
+          var setEndLink = document.getElementById('searchSetEndLink');
+          if (setEndLink) {
+            setEndLink.addEventListener('click', function(e) {
+              e.preventDefault();
+              setRoutePoint('end', { name: item.title, lat: pos.getLat(), lng: pos.getLng() });
+              infowindow.close();
+            });
+          }
+        }, 0);
         recordPlaceSelection(item);
         goToMapTarget(pos, null);
       });
