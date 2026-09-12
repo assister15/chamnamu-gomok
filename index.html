@@ -1843,7 +1843,9 @@
   function paletteGroupOf(props) {
     var species = String(props.KOFTR_NM || '');
     if (species.includes('침활혼효림')) return 'mixed';
-    if (species.includes('기타활엽수') || species.includes('오리나무')) return 'other';
+    if (species.includes('기타활엽수') || species.includes('오리나무') ||
+        species.includes('고로쇠나무') || species.includes('밤나무') ||
+        species.includes('자작나무') || species.includes('박달나무')) return 'other';
     return 'oak';
   }
 
@@ -2393,9 +2395,12 @@
     return out;
   }
 
-  var tileManifest = null;
-  var loadedTileIds = {};
-  var pendingTileIds = {};
+  // 여러 타일셋(폴더)을 동시에 지원 — 기존 tiles(참나무류 등)는 손대지 않고,
+  // 새 수종(tiles_extra)을 완전히 별도 폴더로 추가하기 위한 구조
+  var tileSets = [
+    { folder: 'tiles', manifest: null, loadedTileIds: {}, pendingTileIds: {} },
+    { folder: 'tiles_extra', manifest: null, loadedTileIds: {}, pendingTileIds: {} }
+  ];
 
   function getTileIdsForBounds(bounds, tileSize) {
     var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
@@ -2412,9 +2417,9 @@
     return ids;
   }
 
-  function fetchTile(tileId) {
-    pendingTileIds[tileId] = true;
-    return fetch('tiles/tile_' + tileId + '.geojson.gz')
+  function fetchTile(tileSet, tileId) {
+    tileSet.pendingTileIds[tileId] = true;
+    return fetch(tileSet.folder + '/tile_' + tileId + '.geojson.gz')
       .then(function(res) {
         if (!res.ok) throw new Error('타일 없음: ' + tileId);
         return res.arrayBuffer();
@@ -2427,18 +2432,19 @@
       .then(function(geojson) {
         var transformed = transformFeatures(geojson.features);
         allFeatures = allFeatures.concat(transformed);
-        loadedTileIds[tileId] = true;
+        tileSet.loadedTileIds[tileId] = true;
       })
       .catch(function(err) {
-        loadedTileIds[tileId] = true;
+        tileSet.loadedTileIds[tileId] = true;
       })
       .finally(function() {
-        delete pendingTileIds[tileId];
+        delete tileSet.pendingTileIds[tileId];
       });
   }
 
   function onMapIdle() {
-    if (!tileManifest) return;
+    var anyManifest = tileSets.some(function(ts) { return ts.manifest; });
+    if (!anyManifest) return;
 
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) {
       renderVisiblePolygons();
@@ -2446,34 +2452,46 @@
     }
 
     var bounds = map.getBounds();
-    var neededIds = getTileIdsForBounds(bounds, tileManifest.tileSize);
-    var toFetch = neededIds.filter(function(id) {
-      return tileManifest.tiles[id] && !loadedTileIds[id] && !pendingTileIds[id];
+    var allToFetch = [];
+
+    tileSets.forEach(function(tileSet) {
+      if (!tileSet.manifest) return;
+      var neededIds = getTileIdsForBounds(bounds, tileSet.manifest.tileSize);
+      var toFetch = neededIds.filter(function(id) {
+        return tileSet.manifest.tiles[id] && !tileSet.loadedTileIds[id] && !tileSet.pendingTileIds[id];
+      });
+      toFetch.forEach(function(id) {
+        allToFetch.push(fetchTile(tileSet, id));
+      });
     });
 
     renderVisiblePolygons();
 
-    if (toFetch.length > 0) {
-      Promise.all(toFetch.map(fetchTile)).then(function() {
+    if (allToFetch.length > 0) {
+      Promise.all(allToFetch).then(function() {
         renderVisiblePolygons();
       });
     }
   }
 
   function loadForestData() {
-    fetch('tiles/manifest.json')
-      .then(function(res) {
-        if (!res.ok) throw new Error('manifest.json 없음');
-        return res.json();
-      })
-      .then(function(manifest) {
-        tileManifest = manifest;
-        kakao.maps.event.addListener(map, 'idle', onMapIdle);
-        onMapIdle();
-      })
-      .catch(function(err) {
-        console.log('tiles/manifest.json을 아직 못 찾았습니다. (정상 — 파일 넣기 전까지는 지도+검색만 동작합니다)', err);
-      });
+    var loadPromises = tileSets.map(function(tileSet) {
+      return fetch(tileSet.folder + '/manifest.json')
+        .then(function(res) {
+          if (!res.ok) throw new Error(tileSet.folder + '/manifest.json 없음');
+          return res.json();
+        })
+        .then(function(manifest) {
+          tileSet.manifest = manifest;
+        })
+        .catch(function(err) {
+          console.log(tileSet.folder + '/manifest.json을 아직 못 찾았습니다.', err);
+        });
+    });
+    kakao.maps.event.addListener(map, 'idle', onMapIdle);
+    Promise.all(loadPromises).then(function() {
+      onMapIdle();
+    });
   }
 
   loadForestData();
