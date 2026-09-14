@@ -225,6 +225,46 @@
   }
   #savedListBtn:active { background:#f0f0f0; }
 
+  #drawRouteBtn {
+    position:fixed; bottom:70px; left:64px; z-index:20;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; font-size:19px; display:flex; align-items:center; justify-content:center;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none; touch-action:none;
+  }
+  #drawRouteBtn:active { background:#f0f0f0; }
+  #drawRouteBtn.active { background:#7a3ea1; }
+
+  #drawSettingsOverlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,0.4); z-index:70;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  #drawSettingsOverlay.open { display:flex; }
+  #drawSettingsPanel {
+    background:#fff; width:100%; max-width:420px;
+    border-radius:16px 16px 0 0; padding:16px; box-sizing:border-box;
+  }
+  #drawSettingsPanel h3 { margin:0 0 12px; font-size:15px; display:inline-block; }
+  #drawSettingsCloseBtn {
+    float:right; background:none; border:none; font-size:18px;
+    cursor:pointer; color:#888;
+  }
+  .drawColorRow, .drawWeightRow {
+    display:flex; gap:10px; margin:10px 0 18px;
+  }
+  .drawColorSwatch {
+    width:36px; height:36px; border-radius:50%; border:3px solid transparent;
+    cursor:pointer; padding:0;
+  }
+  .drawColorSwatch.selected { border-color:#333; }
+  .drawWeightBtn {
+    flex:1; border:2px solid #ddd; border-radius:8px; background:#fff;
+    padding:10px 0; cursor:pointer; font-size:13px; color:#555;
+  }
+  .drawWeightBtn.selected { border-color:#4b1575; color:#4b1575; font-weight:bold; }
+
   #weatherBadge {
     position:fixed; bottom:20px; left:12px; z-index:15;
     background:#fff; padding:6px 10px; border-radius:16px;
@@ -460,6 +500,25 @@
     <circle cx="12" cy="10" r="4" fill="#fff"/>
   </svg>
 </button>
+<button id="drawRouteBtn" title="경로 그리기">✏️</button>
+<div id="drawSettingsOverlay">
+  <div id="drawSettingsPanel">
+    <button id="drawSettingsCloseBtn">✕</button>
+    <h3>경로 색상 / 굵기</h3>
+    <div class="drawColorRow">
+      <button class="drawColorSwatch" data-color="#e53935" style="background:#e53935;"></button>
+      <button class="drawColorSwatch" data-color="#1e88e5" style="background:#1e88e5;"></button>
+      <button class="drawColorSwatch" data-color="#43a047" style="background:#43a047;"></button>
+      <button class="drawColorSwatch" data-color="#fb8c00" style="background:#fb8c00;"></button>
+      <button class="drawColorSwatch" data-color="#8e24aa" style="background:#8e24aa;"></button>
+    </div>
+    <div class="drawWeightRow">
+      <button class="drawWeightBtn" data-weight="3">얇게</button>
+      <button class="drawWeightBtn" data-weight="5">보통</button>
+      <button class="drawWeightBtn" data-weight="8">굵게</button>
+    </div>
+  </div>
+</div>
 <div id="weatherBadge"></div>
 <div id="routeStatusBar"></div>
 <div id="savedListOverlay">
@@ -560,7 +619,10 @@
     <p>
       산림청 공식 임상도(1~9영급) 데이터를 기반으로 전국의 참나무류 서식 구역을
       시각화한, 사슴벌레·장수풍뎅이 채집을 위한 지도입니다. 어디에 참나무 노령림이
-      있는지 한눈에 확인할 수 있도록 만들었습니다.
+      있는지 한눈에 확인할 수 있도록 만들었습니다. 지도에 색칠된 폴리곤은 참나무류
+      (상수리·신갈·굴참 등), 침활혼효림, 오리나무, 그리고 고로쇠나무·밤나무·자작나무·
+      박달나무를 포함한 기타활엽수 구역을 나타내며, 폴리곤을 누르면 수종명·영급(나무
+      나이대)·경급(소/중/대경목 추정)·해당 위치의 고도 정보를 확인할 수 있습니다.
     </p>
 
     <h4>사용 설명서</h4>
@@ -568,6 +630,7 @@
       <li><b>장소 저장</b> — 지도에서 원하는 위치를 1~2초 정도 꾹 누르고 있으면 저장 창이 뜹니다. 이름과 아이콘(별·동그라미·자동차)을 정하고 원하면 폴더를 골라 저장하세요.</li>
       <li><b>저장 장소 확인/수정/삭제</b> — 지도에 찍힌 아이콘을 누르면 말풍선이 뜹니다. 여기서 편집·삭제, 그리고 출발/도착 지정도 할 수 있어요.</li>
       <li><b>참나무 폴리곤 표시</b> — 🌳 버튼을 짧게 누르면 전체 표시 켜기/끄기, 1초 정도 꾹 누르면 수종·영급별로 원하는 것만 골라 보는 세부설정 창이 열립니다.</li>
+      <li><b>경로 손그림</b> — ✏️ 버튼을 누르면 그리기 모드로 전환되어, 손가락으로 화면을 누른 채 그으면 그 경로(등산로 등)가 지도에 영구히 저장됩니다. 다시 누르면 그리기 모드 종료. 버튼을 1초 정도 꾹 누르면 색상·굵기를 정할 수 있고, 그려진 경로를 누르면 삭제할 수 있습니다.</li>
       <li><b>검색</b> — 좌측 상단 검색창에 장소명을 입력하면 결과 목록이 뜨고, 선택하면 그 위치로 지도가 이동합니다.</li>
       <li><b>로드뷰</b> — 검색 결과나 저장 장소의 말풍선에서 로드뷰 버튼을 누르면 거리뷰 화면이 열리고, 우측 하단 미니맵에 주변 숲 폴리곤도 함께 표시됩니다.</li>
       <li><b>실시간 위치 추적</b> — 우측 상단 화살표 버튼을 누르면 GPS로 내 위치와 이동 방향(화살표)이 실시간으로 표시됩니다.</li>
@@ -3161,6 +3224,180 @@
     if (e.target === this) closeInfoModal();
   });
   // ===== 지도 소개 정보 모달 끝 =====
+
+  // ===== 손그림 경로 그리기 (버튼으로 모드 on/off, 꾹 누르면 색상/굵기 설정) =====
+  var savedRoutes = [];
+  var savedRoutePolylines = [];
+  var drawModeActive = false;
+  var currentDrawColor = '#e53935';
+  var currentDrawWeight = 5;
+  var activeDrawPolyline = null;
+  var activeDrawPoints = null;
+  var mapContainerEl = document.getElementById('map');
+
+  function loadSavedRoutes() {
+    try {
+      var raw = localStorage.getItem('savedRoutes');
+      savedRoutes = raw ? JSON.parse(raw) : [];
+    } catch (e) { savedRoutes = []; }
+  }
+  function persistSavedRoutes() {
+    try { localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes)); } catch (e) {}
+  }
+
+  function renderSavedRoutes() {
+    savedRoutePolylines.forEach(function(pl) { pl.setMap(null); });
+    savedRoutePolylines = [];
+    savedRoutes.forEach(function(route) {
+      var path = route.points.map(function(pt) { return new kakao.maps.LatLng(pt[0], pt[1]); });
+      var polyline = new kakao.maps.Polyline({
+        map: map, path: path,
+        strokeWeight: route.weight, strokeColor: route.color,
+        strokeOpacity: 0.85, strokeStyle: 'solid'
+      });
+      kakao.maps.event.addListener(polyline, 'click', function(mouseEvent) {
+        suppressNextMapClick = true;
+        infowindow.setPosition(mouseEvent.latLng);
+        infowindow.setContent(
+          '<div style="background:rgba(255,255,255,0.9);padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;">' +
+          '<a href="#" id="deleteRouteLink" style="color:#c0392b;text-decoration:underline;">이 경로 삭제</a></div>'
+        );
+        infowindow.open(map);
+        setTimeout(function() {
+          var delLink = document.getElementById('deleteRouteLink');
+          if (delLink) {
+            delLink.addEventListener('click', function(e) {
+              e.preventDefault();
+              savedRoutes = savedRoutes.filter(function(r) { return r._id !== route._id; });
+              persistSavedRoutes();
+              renderSavedRoutes();
+              infowindow.close();
+            });
+          }
+        }, 0);
+      });
+      savedRoutePolylines.push(polyline);
+    });
+  }
+
+  function containerPointFromTouch(touch) {
+    var rect = mapContainerEl.getBoundingClientRect();
+    return new kakao.maps.Point(touch.clientX - rect.left, touch.clientY - rect.top);
+  }
+
+  function handleDrawTouchStart(e) {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    var proj = map.getProjection();
+    var coord = proj.coordsFromContainerPoint(containerPointFromTouch(e.touches[0]));
+    activeDrawPoints = [coord];
+    activeDrawPolyline = new kakao.maps.Polyline({
+      map: map, path: [coord],
+      strokeWeight: currentDrawWeight, strokeColor: currentDrawColor,
+      strokeOpacity: 0.85, strokeStyle: 'solid'
+    });
+  }
+  function handleDrawTouchMove(e) {
+    if (!activeDrawPolyline || e.touches.length !== 1) return;
+    e.preventDefault();
+    var proj = map.getProjection();
+    var coord = proj.coordsFromContainerPoint(containerPointFromTouch(e.touches[0]));
+    activeDrawPoints.push(coord);
+    activeDrawPolyline.setPath(activeDrawPoints);
+  }
+  function handleDrawTouchEnd(e) {
+    if (!activeDrawPolyline) return;
+    if (activeDrawPoints.length >= 2) {
+      savedRoutes.push({
+        _id: genPlaceId(),
+        points: activeDrawPoints.map(function(c) { return [c.getLat(), c.getLng()]; }),
+        color: currentDrawColor,
+        weight: currentDrawWeight
+      });
+      persistSavedRoutes();
+    }
+    activeDrawPolyline.setMap(null);
+    activeDrawPolyline = null;
+    activeDrawPoints = null;
+    renderSavedRoutes();
+  }
+
+  function setDrawMode(on) {
+    drawModeActive = on;
+    document.getElementById('drawRouteBtn').classList.toggle('active', on);
+    map.setDraggable(!on);
+    map.setZoomable(!on);
+    if (on) {
+      mapContainerEl.addEventListener('touchstart', handleDrawTouchStart, { passive: false });
+      mapContainerEl.addEventListener('touchmove', handleDrawTouchMove, { passive: false });
+      mapContainerEl.addEventListener('touchend', handleDrawTouchEnd);
+      mapContainerEl.addEventListener('touchcancel', handleDrawTouchEnd);
+    } else {
+      mapContainerEl.removeEventListener('touchstart', handleDrawTouchStart);
+      mapContainerEl.removeEventListener('touchmove', handleDrawTouchMove);
+      mapContainerEl.removeEventListener('touchend', handleDrawTouchEnd);
+      mapContainerEl.removeEventListener('touchcancel', handleDrawTouchEnd);
+    }
+  }
+
+  var drawBtnPressTimer = null;
+  var drawBtnLongPressed = false;
+  var drawRouteBtnEl = document.getElementById('drawRouteBtn');
+
+  drawRouteBtnEl.addEventListener('touchstart', function(e) {
+    drawBtnLongPressed = false;
+    drawBtnPressTimer = setTimeout(function() {
+      drawBtnLongPressed = true;
+      openDrawSettingsPanel();
+    }, 900);
+  }, { passive: true });
+  drawRouteBtnEl.addEventListener('touchend', function(e) {
+    clearTimeout(drawBtnPressTimer);
+    if (!drawBtnLongPressed) {
+      setDrawMode(!drawModeActive);
+    }
+  });
+  drawRouteBtnEl.addEventListener('touchcancel', function() {
+    clearTimeout(drawBtnPressTimer);
+  });
+  // 마우스(PC) 대응
+  drawRouteBtnEl.addEventListener('click', function() {
+    if (!('ontouchstart' in window)) setDrawMode(!drawModeActive);
+  });
+
+  function openDrawSettingsPanel() {
+    document.getElementById('drawSettingsOverlay').classList.add('open');
+    document.querySelectorAll('.drawColorSwatch').forEach(function(el) {
+      el.classList.toggle('selected', el.dataset.color === currentDrawColor);
+    });
+    document.querySelectorAll('.drawWeightBtn').forEach(function(el) {
+      el.classList.toggle('selected', Number(el.dataset.weight) === currentDrawWeight);
+    });
+  }
+  document.getElementById('drawSettingsCloseBtn').addEventListener('click', function() {
+    document.getElementById('drawSettingsOverlay').classList.remove('open');
+  });
+  document.getElementById('drawSettingsOverlay').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+  document.querySelectorAll('.drawColorSwatch').forEach(function(el) {
+    el.addEventListener('click', function() {
+      currentDrawColor = el.dataset.color;
+      document.querySelectorAll('.drawColorSwatch').forEach(function(s) { s.classList.remove('selected'); });
+      el.classList.add('selected');
+    });
+  });
+  document.querySelectorAll('.drawWeightBtn').forEach(function(el) {
+    el.addEventListener('click', function() {
+      currentDrawWeight = Number(el.dataset.weight);
+      document.querySelectorAll('.drawWeightBtn').forEach(function(s) { s.classList.remove('selected'); });
+      el.classList.add('selected');
+    });
+  });
+
+  loadSavedRoutes();
+  renderSavedRoutes();
+  // ===== 손그림 경로 그리기 끝 =====
 </script>
 
 </body>
