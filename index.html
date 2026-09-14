@@ -3230,7 +3230,23 @@
   var savedRoutePolylines = [];
   var drawModeActive = false;
   var currentDrawColor = '#e53935';
-  var currentDrawWeight = 5;
+  var currentDrawWeight = 3; // 기본값: 얇게 (마지막 설정이 저장돼 있으면 아래에서 덮어씀)
+
+  function loadDrawSettings() {
+    try {
+      var raw = localStorage.getItem('drawSettings');
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s.color) currentDrawColor = s.color;
+        if (s.weight) currentDrawWeight = s.weight;
+      }
+    } catch (e) {}
+  }
+  function persistDrawSettings() {
+    try {
+      localStorage.setItem('drawSettings', JSON.stringify({ color: currentDrawColor, weight: currentDrawWeight }));
+    } catch (e) {}
+  }
   var activeDrawPolyline = null;
   var activeDrawPoints = null;
   var mapContainerEl = document.getElementById('map');
@@ -3385,6 +3401,7 @@
       currentDrawColor = el.dataset.color;
       document.querySelectorAll('.drawColorSwatch').forEach(function(s) { s.classList.remove('selected'); });
       el.classList.add('selected');
+      persistDrawSettings();
     });
   });
   document.querySelectorAll('.drawWeightBtn').forEach(function(el) {
@@ -3392,9 +3409,11 @@
       currentDrawWeight = Number(el.dataset.weight);
       document.querySelectorAll('.drawWeightBtn').forEach(function(s) { s.classList.remove('selected'); });
       el.classList.add('selected');
+      persistDrawSettings();
     });
   });
 
+  loadDrawSettings();
   loadSavedRoutes();
   renderSavedRoutes();
   // ===== 손그림 경로 그리기 끝 =====
