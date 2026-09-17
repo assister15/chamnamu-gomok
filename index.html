@@ -298,9 +298,21 @@
   }
   #savedListOverlay.show { display:flex; }
   #savedListPanel {
-    background:#fff; width:100%; max-width:420px; max-height:60vh;
-    border-radius:16px 16px 0 0; padding:14px; box-sizing:border-box;
-    overflow-y:auto;
+    background:#fff; width:100%; max-width:420px; height:60vh;
+    min-height:120px; max-height:92vh;
+    border-radius:16px 16px 0 0; box-sizing:border-box;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  #savedListResizeHandle {
+    flex-shrink:0; width:100%; height:22px; display:flex;
+    align-items:center; justify-content:center; cursor:ns-resize;
+    touch-action:none;
+  }
+  #savedListResizeHandle::before {
+    content:''; width:40px; height:5px; border-radius:3px; background:#ddd;
+  }
+  #savedListPanelBody {
+    flex:1; min-height:0; overflow-y:auto; padding:0 14px 14px;
   }
   #savedListPanel h3 { margin:0 0 10px; font-size:15px; display:inline-block; }
   #savedListCloseBtn {
@@ -523,16 +535,19 @@
 <div id="routeStatusBar"></div>
 <div id="savedListOverlay">
   <div id="savedListPanel">
-    <button id="savedListCloseBtn">✕</button>
-    <h3>저장한 장소</h3>
-    <div id="folderHeaderRow">
-      <div id="folderBreadcrumb" style="display:none;">
-        <button id="folderBackBtn">‹</button>
-        <span id="folderBreadcrumbName"></span>
+    <div id="savedListResizeHandle"></div>
+    <div id="savedListPanelBody">
+      <button id="savedListCloseBtn">✕</button>
+      <h3>저장한 장소</h3>
+      <div id="folderHeaderRow">
+        <div id="folderBreadcrumb" style="display:none;">
+          <button id="folderBackBtn">‹</button>
+          <span id="folderBreadcrumbName"></span>
+        </div>
+        <button id="manageFoldersBtn">폴더 관리</button>
       </div>
-      <button id="manageFoldersBtn">폴더 관리</button>
+      <div id="savedListItems"></div>
     </div>
-    <div id="savedListItems"></div>
   </div>
 </div>
 
@@ -3417,6 +3432,71 @@
   loadSavedRoutes();
   renderSavedRoutes();
   // ===== 손그림 경로 그리기 끝 =====
+
+  // ===== 저장목록 패널 높이 드래그 조절 =====
+  (function() {
+    var handle = document.getElementById('savedListResizeHandle');
+    var panel = document.getElementById('savedListPanel');
+    var startY = 0;
+    var startHeight = 0;
+
+    function loadPanelHeight() {
+      try {
+        var saved = localStorage.getItem('savedListPanelHeightVh');
+        if (saved) panel.style.height = saved + 'vh';
+      } catch (e) {}
+    }
+    function persistPanelHeight(vh) {
+      try { localStorage.setItem('savedListPanelHeightVh', String(vh)); } catch (e) {}
+    }
+
+    function onMove(clientY) {
+      var deltaPx = startY - clientY; // 위로 끌면 양수(커짐)
+      var deltaVh = (deltaPx / window.innerHeight) * 100;
+      var newVh = startHeight + deltaVh;
+      newVh = Math.max(15, Math.min(92, newVh));
+      panel.style.height = newVh + 'vh';
+    }
+    function onEnd() {
+      var currentVh = parseFloat(panel.style.height) || 60;
+      persistPanelHeight(currentVh);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onEnd);
+    }
+    function onTouchMove(e) {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      onMove(e.touches[0].clientY);
+    }
+    function onMouseMove(e) { onMove(e.clientY); }
+
+    function beginDrag(clientY) {
+      startY = clientY;
+      startHeight = parseFloat(panel.style.height) ||
+        (panel.getBoundingClientRect().height / window.innerHeight * 100);
+      panel.style.height = startHeight + 'vh';
+    }
+
+    handle.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      beginDrag(e.touches[0].clientY);
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    }, { passive: false });
+
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      beginDrag(e.clientY);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onEnd);
+    });
+
+    loadPanelHeight();
+  })();
+  // ===== 저장목록 패널 높이 드래그 조절 끝 =====
 </script>
 
 </body>
