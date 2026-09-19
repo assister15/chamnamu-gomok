@@ -2114,7 +2114,6 @@
         btn.textContent = '📍';
         var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
         map.setCenter(here);
-        map.setLevel(4);
 
         if (myLocationMarker) myLocationMarker.setMap(null);
         myLocationMarker = new kakao.maps.Marker({
