@@ -1402,6 +1402,7 @@
   var navWatchId = null;
   var navUserMarker = null;
   var navTrackingActive = false;
+  var navFollowMap = true; // 사용자가 지도를 직접 움직이면 false로 바뀌어 자동 재중심을 멈춤
   var navDisplayPos = null;
   var navLastFixTime = null;
   var navAnimRAF = null;
@@ -1552,7 +1553,7 @@
       var curLng = fromLng + (targetLng - fromLng) * t;
       navDisplayPos = { lat: curLat, lng: curLng };
       placeNavUserMarker(curLat, curLng);
-      map.setCenter(new kakao.maps.LatLng(curLat, curLng));
+      if (navFollowMap) map.setCenter(new kakao.maps.LatLng(curLat, curLng));
       if (t < 1) {
         navAnimRAF = requestAnimationFrame(step);
       } else {
@@ -1570,6 +1571,7 @@
     searchMarkers.forEach(function(m) { m.setMap(null); });
     searchMarkers = [];
     navTrackingActive = true;
+    navFollowMap = true;
     navDisplayPos = null;
     navLastFixTime = null;
     navHeadingAngle = 0;
@@ -1645,6 +1647,12 @@
   }
 
   document.getElementById('trackToggleBtn').addEventListener('click', toggleNavTracking);
+
+  // 위치추적 중 사용자가 지도를 손으로 직접 움직이면, 자동으로 내 위치로
+  // 재중심시키는 걸 멈춰서 자유롭게 둘러볼 수 있게 함(현위치 버튼으로 복귀 가능)
+  kakao.maps.event.addListener(map, 'dragstart', function() {
+    if (navTrackingActive) navFollowMap = false;
+  });
   // ===== 실시간 위치 추적 기능 끝 =====
 
   function searchPlaces() {
@@ -2106,6 +2114,7 @@
       alert('이 브라우저에서는 위치 찾기를 지원하지 않습니다.');
       return;
     }
+    if (navTrackingActive) navFollowMap = true;
     var btn = document.getElementById('locateBtn');
     btn.textContent = '⏳';
 
