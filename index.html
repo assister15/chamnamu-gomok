@@ -2115,6 +2115,7 @@
       return;
     }
     if (navTrackingActive) navFollowMap = true;
+    var levelBeforeLocate = map.getLevel();
     var btn = document.getElementById('locateBtn');
     btn.textContent = '⏳';
 
@@ -2123,6 +2124,7 @@
         btn.textContent = '📍';
         var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
         map.setCenter(here);
+        map.setLevel(levelBeforeLocate); // 무슨 이유로든 줌이 바뀌었을 경우 강제로 원상복구
 
         if (myLocationMarker) myLocationMarker.setMap(null);
         myLocationMarker = new kakao.maps.Marker({
