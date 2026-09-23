@@ -1410,6 +1410,7 @@
   var navHeadingSource = 'compass'; // 'gps' 또는 'compass' — 이동 중엔 gps, 정지 시 compass
   var navLastRawPos = null; // GPS 진행방향 계산용 이전 원시 좌표
   var NAV_GPS_HEADING_SPEED = 0.6; // m/s — 이 속도 이상 움직일 때만 GPS 방향 사용
+  var NAV_GPS_ACCURACY_LIMIT = 15; // m — 이보다 오차범위가 크면(숲 등 신호 나쁨) GPS 방향을 못 믿고 나침반 사용
   var NAV_HEADING_SMOOTH_GPS = 0.25; // GPS 진행방향 스무딩 계수
   var NAV_HEADING_SMOOTH_COMPASS = 0.12; // 나침반 스무딩 계수 (더 강하게 눌러서 떨림 억제)
   var navCompassBuffer = []; // 나침반 원시값 단기 평균용 버퍼
@@ -1593,7 +1594,8 @@
           var speed = (typeof pos.coords.speed === 'number' && pos.coords.speed !== null && !isNaN(pos.coords.speed))
             ? pos.coords.speed
             : (dt > 0 ? dist / dt : 0);
-          if (speed > NAV_GPS_HEADING_SPEED && dist > 1.5) {
+          if (speed > NAV_GPS_HEADING_SPEED && dist > 1.5 &&
+              (typeof pos.coords.accuracy !== 'number' || pos.coords.accuracy <= NAV_GPS_ACCURACY_LIMIT)) {
             navHeadingSource = 'gps';
             var bearing = (typeof pos.coords.heading === 'number' && pos.coords.heading !== null && !isNaN(pos.coords.heading))
               ? pos.coords.heading
