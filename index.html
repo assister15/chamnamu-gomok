@@ -1131,6 +1131,7 @@
         newName = newName.trim();
         if (!newName) return;
         folder.name = newName;
+        folder.updatedAt = Date.now();
         persistSavedFolders();
         renderFolderManageList();
         renderSavedListItems();
@@ -1165,7 +1166,7 @@
     var input = document.getElementById('newFolderNameInput');
     var name = input.value.trim();
     if (!name) return;
-    savedFolders.push({ _id: genPlaceId(), name: name });
+    savedFolders.push({ _id: genPlaceId(), name: name, updatedAt: Date.now() });
     input.value = '';
     persistSavedFolders();
     renderFolderManageList();
@@ -2863,7 +2864,8 @@
       lat: placeModalLat, lng: placeModalLng, name: name,
       icon: placeModalSelectedIcon, folderId: folderId,
       _id: (placeModalMode === 'edit' && savedPlaces[placeModalTargetIdx] && savedPlaces[placeModalTargetIdx]._id)
-        || genPlaceId()
+        || genPlaceId(),
+      updatedAt: Date.now() // 기기 간 합칠 때, 이 시각이 더 최근인 쪽 내용을 우선함
     };
     if (placeModalMode === 'create') {
       savedPlaces.push(entry);
@@ -3070,7 +3072,17 @@
     var byId = {};
     localList.forEach(function(p) { if (p._id) byId[p._id] = p; });
     remoteList.forEach(function(p) {
-      if (p._id && !byId[p._id]) byId[p._id] = p;
+      if (!p._id) return;
+      var existing = byId[p._id];
+      if (!existing) {
+        byId[p._id] = p;
+      } else {
+        // 같은 장소가 양쪽에 다 있으면(이름 수정 등 충돌), "마지막 수정 시각(updatedAt)"이
+        // 더 최근인 쪽을 채택함. updatedAt이 없는(예전) 데이터는 0으로 취급.
+        var existingTime = existing.updatedAt || 0;
+        var incomingTime = p.updatedAt || 0;
+        if (incomingTime > existingTime) byId[p._id] = p;
+      }
     });
     return Object.keys(byId)
       .filter(function(k) { return !deletedSet[k]; })
