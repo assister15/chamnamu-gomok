@@ -1488,13 +1488,46 @@
     updateUserHeading(avgAngle, NAV_HEADING_SMOOTH_COMPASS);
   }
 
+  // 기기를 눕히지 않고 세워서(걸으면서 보는 자세) 들고 있을 때도 정확하도록,
+  // 기울기(beta/gamma)까지 반영해서 나침반 방향을 계산함.
+  // (단순히 "360 - alpha"만 쓰면 기기를 평평하게 눕혔을 때만 정확하고,
+  //  세워서 들면 기울어진 정도에 따라 오차가 커짐 — 실제 문제였던 원인)
+  function computeTiltCompensatedHeading(alpha, beta, gamma) {
+    if (alpha == null || beta == null || gamma == null) return null;
+    var degToRad = Math.PI / 180;
+    var x = beta * degToRad;
+    var y = gamma * degToRad;
+    var z = alpha * degToRad;
+    var cX = Math.cos(x), cY = Math.cos(y), cZ = Math.cos(z);
+    var sX = Math.sin(x), sY = Math.sin(y), sZ = Math.sin(z);
+    var Vx = -cZ * sY - sZ * sX * cY;
+    var Vy = -sZ * sY + cZ * sX * cY;
+    var heading = Math.atan2(Vx, Vy) * (180 / Math.PI);
+    if (heading < 0) heading += 360;
+    return heading;
+  }
+
+  // 절대방향(진짜 북쪽 기준) 이벤트를 한 번이라도 받은 기기인지 기록.
+  // 안드로이드 등에서는 'deviceorientation'(임의 기준, 북쪽과 무관)과
+  // 'deviceorientationabsolute'(진짜 북쪽 기준)가 동시에 들어올 수 있는데,
+  // 앞의 것을 섞어 쓰면 기준 자체가 흔들려서 방향이 크게 어긋남 — 이것도 실제 문제 원인.
+  // 절대방향 이벤트가 들어오는 기기라면 그것만 신뢰하고, 임의 기준 이벤트는 무시함.
+  var navGotAbsoluteOrientation = false;
   function handleDeviceOrientation(e) {
     if (navHeadingSource === 'gps') return;
+    if (e.type === 'deviceorientationabsolute' || e.absolute === true) {
+      navGotAbsoluteOrientation = true;
+    }
     var heading;
     if (typeof e.webkitCompassHeading === 'number') {
+      // iOS: 이미 기기 자체에서 기울기 보정 + 진짜 북쪽 기준으로 계산해주는 값이라 그대로 사용.
       heading = e.webkitCompassHeading;
     } else if (e.alpha != null) {
-      heading = 360 - e.alpha;
+      if (navGotAbsoluteOrientation && e.type !== 'deviceorientationabsolute' && e.absolute !== true) {
+        return; // 절대방향을 지원하는 기기에서 들어온 임의 기준 값은 무시
+      }
+      heading = computeTiltCompensatedHeading(e.alpha, e.beta, e.gamma);
+      if (heading === null) return;
     } else {
       return;
     }
