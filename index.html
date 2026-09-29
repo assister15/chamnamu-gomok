@@ -225,6 +225,46 @@
   }
   #savedListBtn:active { background:#f0f0f0; }
 
+  #drawRouteBtn {
+    position:fixed; bottom:70px; left:64px; z-index:20;
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    cursor:pointer; font-size:19px; display:flex; align-items:center; justify-content:center;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none; touch-action:none;
+  }
+  #drawRouteBtn:active { background:#f0f0f0; }
+  #drawRouteBtn.active { background:#7a3ea1; }
+
+  #drawSettingsOverlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,0.4); z-index:70;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  #drawSettingsOverlay.open { display:flex; }
+  #drawSettingsPanel {
+    background:#fff; width:100%; max-width:420px;
+    border-radius:16px 16px 0 0; padding:16px; box-sizing:border-box;
+  }
+  #drawSettingsPanel h3 { margin:0 0 12px; font-size:15px; display:inline-block; }
+  #drawSettingsCloseBtn {
+    float:right; background:none; border:none; font-size:18px;
+    cursor:pointer; color:#888;
+  }
+  .drawColorRow, .drawWeightRow {
+    display:flex; gap:10px; margin:10px 0 18px;
+  }
+  .drawColorSwatch {
+    width:36px; height:36px; border-radius:50%; border:3px solid transparent;
+    cursor:pointer; padding:0;
+  }
+  .drawColorSwatch.selected { border-color:#333; }
+  .drawWeightBtn {
+    flex:1; border:2px solid #ddd; border-radius:8px; background:#fff;
+    padding:10px 0; cursor:pointer; font-size:13px; color:#555;
+  }
+  .drawWeightBtn.selected { border-color:#4b1575; color:#4b1575; font-weight:bold; }
+
   #weatherBadge {
     position:fixed; bottom:20px; left:12px; z-index:15;
     background:#fff; padding:6px 10px; border-radius:16px;
@@ -258,9 +298,21 @@
   }
   #savedListOverlay.show { display:flex; }
   #savedListPanel {
-    background:#fff; width:100%; max-width:420px; max-height:60vh;
-    border-radius:16px 16px 0 0; padding:14px; box-sizing:border-box;
-    overflow-y:auto;
+    background:#fff; width:100%; max-width:420px; height:60vh;
+    min-height:120px; max-height:92vh;
+    border-radius:16px 16px 0 0; box-sizing:border-box;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  #savedListResizeHandle {
+    flex-shrink:0; width:100%; height:22px; display:flex;
+    align-items:center; justify-content:center; cursor:ns-resize;
+    touch-action:none;
+  }
+  #savedListResizeHandle::before {
+    content:''; width:40px; height:5px; border-radius:3px; background:#ddd;
+  }
+  #savedListPanelBody {
+    flex:1; min-height:0; overflow-y:auto; padding:0 14px 14px;
   }
   #savedListPanel h3 { margin:0 0 10px; font-size:15px; display:inline-block; }
   #savedListCloseBtn {
@@ -460,20 +512,42 @@
     <circle cx="12" cy="10" r="4" fill="#fff"/>
   </svg>
 </button>
+<button id="drawRouteBtn" title="경로 그리기">✏️</button>
+<div id="drawSettingsOverlay">
+  <div id="drawSettingsPanel">
+    <button id="drawSettingsCloseBtn">✕</button>
+    <h3>경로 색상 / 굵기</h3>
+    <div class="drawColorRow">
+      <button class="drawColorSwatch" data-color="#e53935" style="background:#e53935;"></button>
+      <button class="drawColorSwatch" data-color="#1e88e5" style="background:#1e88e5;"></button>
+      <button class="drawColorSwatch" data-color="#43a047" style="background:#43a047;"></button>
+      <button class="drawColorSwatch" data-color="#fb8c00" style="background:#fb8c00;"></button>
+      <button class="drawColorSwatch" data-color="#8e24aa" style="background:#8e24aa;"></button>
+    </div>
+    <div class="drawWeightRow">
+      <button class="drawWeightBtn" data-weight="3">얇게</button>
+      <button class="drawWeightBtn" data-weight="5">보통</button>
+      <button class="drawWeightBtn" data-weight="8">굵게</button>
+    </div>
+  </div>
+</div>
 <div id="weatherBadge"></div>
 <div id="routeStatusBar"></div>
 <div id="savedListOverlay">
   <div id="savedListPanel">
-    <button id="savedListCloseBtn">✕</button>
-    <h3>저장한 장소</h3>
-    <div id="folderHeaderRow">
-      <div id="folderBreadcrumb" style="display:none;">
-        <button id="folderBackBtn">‹</button>
-        <span id="folderBreadcrumbName"></span>
+    <div id="savedListResizeHandle"></div>
+    <div id="savedListPanelBody">
+      <button id="savedListCloseBtn">✕</button>
+      <h3>저장한 장소</h3>
+      <div id="folderHeaderRow">
+        <div id="folderBreadcrumb" style="display:none;">
+          <button id="folderBackBtn">‹</button>
+          <span id="folderBreadcrumbName"></span>
+        </div>
+        <button id="manageFoldersBtn">폴더 관리</button>
       </div>
-      <button id="manageFoldersBtn">폴더 관리</button>
+      <div id="savedListItems"></div>
     </div>
-    <div id="savedListItems"></div>
   </div>
 </div>
 
@@ -560,7 +634,10 @@
     <p>
       산림청 공식 임상도(1~9영급) 데이터를 기반으로 전국의 참나무류 서식 구역을
       시각화한, 사슴벌레·장수풍뎅이 채집을 위한 지도입니다. 어디에 참나무 노령림이
-      있는지 한눈에 확인할 수 있도록 만들었습니다.
+      있는지 한눈에 확인할 수 있도록 만들었습니다. 지도에 색칠된 폴리곤은 참나무류
+      (상수리·신갈·굴참 등), 침활혼효림, 오리나무, 그리고 고로쇠나무·밤나무·자작나무·
+      박달나무를 포함한 기타활엽수 구역을 나타내며, 폴리곤을 누르면 수종명·영급(나무
+      나이대)·경급(소/중/대경목 추정)·해당 위치의 고도 정보를 확인할 수 있습니다.
     </p>
 
     <h4>사용 설명서</h4>
@@ -568,6 +645,7 @@
       <li><b>장소 저장</b> — 지도에서 원하는 위치를 1~2초 정도 꾹 누르고 있으면 저장 창이 뜹니다. 이름과 아이콘(별·동그라미·자동차)을 정하고 원하면 폴더를 골라 저장하세요.</li>
       <li><b>저장 장소 확인/수정/삭제</b> — 지도에 찍힌 아이콘을 누르면 말풍선이 뜹니다. 여기서 편집·삭제, 그리고 출발/도착 지정도 할 수 있어요.</li>
       <li><b>참나무 폴리곤 표시</b> — 🌳 버튼을 짧게 누르면 전체 표시 켜기/끄기, 1초 정도 꾹 누르면 수종·영급별로 원하는 것만 골라 보는 세부설정 창이 열립니다.</li>
+      <li><b>경로 손그림</b> — ✏️ 버튼을 누르면 그리기 모드로 전환되어, 손가락으로 화면을 누른 채 그으면 그 경로(등산로 등)가 지도에 영구히 저장됩니다. 다시 누르면 그리기 모드 종료. 버튼을 1초 정도 꾹 누르면 색상·굵기를 정할 수 있고, 그려진 경로를 누르면 삭제할 수 있습니다.</li>
       <li><b>검색</b> — 좌측 상단 검색창에 장소명을 입력하면 결과 목록이 뜨고, 선택하면 그 위치로 지도가 이동합니다.</li>
       <li><b>로드뷰</b> — 검색 결과나 저장 장소의 말풍선에서 로드뷰 버튼을 누르면 거리뷰 화면이 열리고, 우측 하단 미니맵에 주변 숲 폴리곤도 함께 표시됩니다.</li>
       <li><b>실시간 위치 추적</b> — 우측 상단 화살표 버튼을 누르면 GPS로 내 위치와 이동 방향(화살표)이 실시간으로 표시됩니다.</li>
@@ -1326,6 +1404,7 @@
   var navWatchId = null;
   var navUserMarker = null;
   var navTrackingActive = false;
+  var navFollowMap = true; // 사용자가 지도를 직접 움직이면 false로 바뀌어 자동 재중심을 멈춤
   var navDisplayPos = null;
   var navLastFixTime = null;
   var navAnimRAF = null;
@@ -1333,6 +1412,7 @@
   var navHeadingSource = 'compass'; // 'gps' 또는 'compass' — 이동 중엔 gps, 정지 시 compass
   var navLastRawPos = null; // GPS 진행방향 계산용 이전 원시 좌표
   var NAV_GPS_HEADING_SPEED = 0.6; // m/s — 이 속도 이상 움직일 때만 GPS 방향 사용
+  var NAV_GPS_ACCURACY_LIMIT = 15; // m — 이보다 오차범위가 크면(숲 등 신호 나쁨) GPS 방향을 못 믿고 나침반 사용
   var NAV_HEADING_SMOOTH_GPS = 0.25; // GPS 진행방향 스무딩 계수
   var NAV_HEADING_SMOOTH_COMPASS = 0.12; // 나침반 스무딩 계수 (더 강하게 눌러서 떨림 억제)
   var navCompassBuffer = []; // 나침반 원시값 단기 평균용 버퍼
@@ -1476,7 +1556,7 @@
       var curLng = fromLng + (targetLng - fromLng) * t;
       navDisplayPos = { lat: curLat, lng: curLng };
       placeNavUserMarker(curLat, curLng);
-      map.setCenter(new kakao.maps.LatLng(curLat, curLng));
+      if (navFollowMap) map.setCenter(new kakao.maps.LatLng(curLat, curLng));
       if (t < 1) {
         navAnimRAF = requestAnimationFrame(step);
       } else {
@@ -1494,6 +1574,7 @@
     searchMarkers.forEach(function(m) { m.setMap(null); });
     searchMarkers = [];
     navTrackingActive = true;
+    navFollowMap = true;
     navDisplayPos = null;
     navLastFixTime = null;
     navHeadingAngle = 0;
@@ -1515,7 +1596,8 @@
           var speed = (typeof pos.coords.speed === 'number' && pos.coords.speed !== null && !isNaN(pos.coords.speed))
             ? pos.coords.speed
             : (dt > 0 ? dist / dt : 0);
-          if (speed > NAV_GPS_HEADING_SPEED && dist > 1.5) {
+          if (speed > NAV_GPS_HEADING_SPEED && dist > 1.5 &&
+              (typeof pos.coords.accuracy !== 'number' || pos.coords.accuracy <= NAV_GPS_ACCURACY_LIMIT)) {
             navHeadingSource = 'gps';
             var bearing = (typeof pos.coords.heading === 'number' && pos.coords.heading !== null && !isNaN(pos.coords.heading))
               ? pos.coords.heading
@@ -1569,6 +1651,12 @@
   }
 
   document.getElementById('trackToggleBtn').addEventListener('click', toggleNavTracking);
+
+  // 위치추적 중 사용자가 지도를 손으로 직접 움직이면, 자동으로 내 위치로
+  // 재중심시키는 걸 멈춰서 자유롭게 둘러볼 수 있게 함(현위치 버튼으로 복귀 가능)
+  kakao.maps.event.addListener(map, 'dragstart', function() {
+    if (navTrackingActive) navFollowMap = false;
+  });
   // ===== 실시간 위치 추적 기능 끝 =====
 
   function searchPlaces() {
@@ -1845,7 +1933,9 @@
   function paletteGroupOf(props) {
     var species = String(props.KOFTR_NM || '');
     if (species.includes('침활혼효림')) return 'mixed';
-    if (species.includes('기타활엽수') || species.includes('오리나무')) return 'other';
+    if (species.includes('기타활엽수') || species.includes('오리나무') ||
+        species.includes('고로쇠나무') || species.includes('밤나무') ||
+        species.includes('자작나무') || species.includes('박달나무')) return 'other';
     return 'oak';
   }
 
@@ -1894,16 +1984,29 @@
   var levelVisibility = { '1': true, '2': true, '3': true, '4': true, '5': true };
 
   function fetchElevation(lat, lng) {
-    return fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
+    return fetch('https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lng)
       .then(function(res) {
-        if (!res.ok) throw new Error('open-elevation 실패');
+        if (!res.ok) throw new Error('open-meteo 실패');
         return res.json();
       })
       .then(function(data) {
-        if (data && data.results && data.results[0] && data.results[0].elevation != null) {
-          return data.results[0].elevation;
+        if (data && data.elevation && data.elevation[0] != null) {
+          return data.elevation[0];
         }
-        throw new Error('open-elevation 데이터 없음');
+        throw new Error('open-meteo 데이터 없음');
+      })
+      .catch(function() {
+        return fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + lat + ',' + lng)
+          .then(function(res) {
+            if (!res.ok) throw new Error('open-elevation 실패');
+            return res.json();
+          })
+          .then(function(data) {
+            if (data && data.results && data.results[0] && data.results[0].elevation != null) {
+              return data.results[0].elevation;
+            }
+            throw new Error('open-elevation 데이터 없음');
+          });
       })
       .catch(function() {
         return fetch('https://api.opentopodata.org/v1/srtm90m?locations=' + lat + ',' + lng)
@@ -2028,6 +2131,8 @@
       alert('이 브라우저에서는 위치 찾기를 지원하지 않습니다.');
       return;
     }
+    if (navTrackingActive) navFollowMap = true;
+    var levelBeforeLocate = map.getLevel();
     var btn = document.getElementById('locateBtn');
     btn.textContent = '⏳';
 
@@ -2036,7 +2141,7 @@
         btn.textContent = '📍';
         var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
         map.setCenter(here);
-        map.setLevel(4);
+        map.setLevel(levelBeforeLocate); // 무슨 이유로든 줌이 바뀌었을 경우 강제로 원상복구
 
         if (myLocationMarker) myLocationMarker.setMap(null);
         myLocationMarker = new kakao.maps.Marker({
@@ -2395,9 +2500,12 @@
     return out;
   }
 
-  var tileManifest = null;
-  var loadedTileIds = {};
-  var pendingTileIds = {};
+  // 여러 타일셋(폴더)을 동시에 지원 — 기존 tiles(참나무류 등)는 손대지 않고,
+  // 새 수종(tiles_extra)을 완전히 별도 폴더로 추가하기 위한 구조
+  var tileSets = [
+    { folder: 'tiles', manifest: null, loadedTileIds: {}, pendingTileIds: {} },
+    { folder: 'tiles_extra', manifest: null, loadedTileIds: {}, pendingTileIds: {} }
+  ];
 
   function getTileIdsForBounds(bounds, tileSize) {
     var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
@@ -2414,9 +2522,9 @@
     return ids;
   }
 
-  function fetchTile(tileId) {
-    pendingTileIds[tileId] = true;
-    return fetch('tiles/tile_' + tileId + '.geojson.gz')
+  function fetchTile(tileSet, tileId) {
+    tileSet.pendingTileIds[tileId] = true;
+    return fetch(tileSet.folder + '/tile_' + tileId + '.geojson.gz')
       .then(function(res) {
         if (!res.ok) throw new Error('타일 없음: ' + tileId);
         return res.arrayBuffer();
@@ -2429,18 +2537,19 @@
       .then(function(geojson) {
         var transformed = transformFeatures(geojson.features);
         allFeatures = allFeatures.concat(transformed);
-        loadedTileIds[tileId] = true;
+        tileSet.loadedTileIds[tileId] = true;
       })
       .catch(function(err) {
-        loadedTileIds[tileId] = true;
+        tileSet.loadedTileIds[tileId] = true;
       })
       .finally(function() {
-        delete pendingTileIds[tileId];
+        delete tileSet.pendingTileIds[tileId];
       });
   }
 
   function onMapIdle() {
-    if (!tileManifest) return;
+    var anyManifest = tileSets.some(function(ts) { return ts.manifest; });
+    if (!anyManifest) return;
 
     if (map.getLevel() > ZOOM_LEVEL_THRESHOLD) {
       renderVisiblePolygons();
@@ -2448,34 +2557,46 @@
     }
 
     var bounds = map.getBounds();
-    var neededIds = getTileIdsForBounds(bounds, tileManifest.tileSize);
-    var toFetch = neededIds.filter(function(id) {
-      return tileManifest.tiles[id] && !loadedTileIds[id] && !pendingTileIds[id];
+    var allToFetch = [];
+
+    tileSets.forEach(function(tileSet) {
+      if (!tileSet.manifest) return;
+      var neededIds = getTileIdsForBounds(bounds, tileSet.manifest.tileSize);
+      var toFetch = neededIds.filter(function(id) {
+        return tileSet.manifest.tiles[id] && !tileSet.loadedTileIds[id] && !tileSet.pendingTileIds[id];
+      });
+      toFetch.forEach(function(id) {
+        allToFetch.push(fetchTile(tileSet, id));
+      });
     });
 
     renderVisiblePolygons();
 
-    if (toFetch.length > 0) {
-      Promise.all(toFetch.map(fetchTile)).then(function() {
+    if (allToFetch.length > 0) {
+      Promise.all(allToFetch).then(function() {
         renderVisiblePolygons();
       });
     }
   }
 
   function loadForestData() {
-    fetch('tiles/manifest.json')
-      .then(function(res) {
-        if (!res.ok) throw new Error('manifest.json 없음');
-        return res.json();
-      })
-      .then(function(manifest) {
-        tileManifest = manifest;
-        kakao.maps.event.addListener(map, 'idle', onMapIdle);
-        onMapIdle();
-      })
-      .catch(function(err) {
-        console.log('tiles/manifest.json을 아직 못 찾았습니다. (정상 — 파일 넣기 전까지는 지도+검색만 동작합니다)', err);
-      });
+    var loadPromises = tileSets.map(function(tileSet) {
+      return fetch(tileSet.folder + '/manifest.json')
+        .then(function(res) {
+          if (!res.ok) throw new Error(tileSet.folder + '/manifest.json 없음');
+          return res.json();
+        })
+        .then(function(manifest) {
+          tileSet.manifest = manifest;
+        })
+        .catch(function(err) {
+          console.log(tileSet.folder + '/manifest.json을 아직 못 찾았습니다.', err);
+        });
+    });
+    kakao.maps.event.addListener(map, 'idle', onMapIdle);
+    Promise.all(loadPromises).then(function() {
+      onMapIdle();
+    });
   }
 
   loadForestData();
@@ -3222,6 +3343,264 @@
     if (e.target === this) closeInfoModal();
   });
   // ===== 지도 소개 정보 모달 끝 =====
+
+  // ===== 손그림 경로 그리기 (버튼으로 모드 on/off, 꾹 누르면 색상/굵기 설정) =====
+  var savedRoutes = [];
+  var savedRoutePolylines = [];
+  var drawModeActive = false;
+  var currentDrawColor = '#e53935';
+  var currentDrawWeight = 3; // 기본값: 얇게 (마지막 설정이 저장돼 있으면 아래에서 덮어씀)
+
+  function loadDrawSettings() {
+    try {
+      var raw = localStorage.getItem('drawSettings');
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s.color) currentDrawColor = s.color;
+        if (s.weight) currentDrawWeight = s.weight;
+      }
+    } catch (e) {}
+  }
+  function persistDrawSettings() {
+    try {
+      localStorage.setItem('drawSettings', JSON.stringify({ color: currentDrawColor, weight: currentDrawWeight }));
+    } catch (e) {}
+  }
+  var activeDrawPolyline = null;
+  var activeDrawPoints = null;
+  var mapContainerEl = document.getElementById('map');
+
+  function loadSavedRoutes() {
+    try {
+      var raw = localStorage.getItem('savedRoutes');
+      savedRoutes = raw ? JSON.parse(raw) : [];
+    } catch (e) { savedRoutes = []; }
+  }
+  function persistSavedRoutes() {
+    try { localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes)); } catch (e) {}
+  }
+
+  function renderSavedRoutes() {
+    savedRoutePolylines.forEach(function(pl) { pl.setMap(null); });
+    savedRoutePolylines = [];
+    savedRoutes.forEach(function(route) {
+      var path = route.points.map(function(pt) { return new kakao.maps.LatLng(pt[0], pt[1]); });
+      var polyline = new kakao.maps.Polyline({
+        map: map, path: path,
+        strokeWeight: route.weight, strokeColor: route.color,
+        strokeOpacity: 0.85, strokeStyle: 'solid'
+      });
+      kakao.maps.event.addListener(polyline, 'click', function(mouseEvent) {
+        suppressNextMapClick = true;
+        infowindow.setPosition(mouseEvent.latLng);
+        infowindow.setContent(
+          '<div style="background:rgba(255,255,255,0.9);padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:12px;">' +
+          '<a href="#" id="deleteRouteLink" style="color:#c0392b;text-decoration:underline;">이 경로 삭제</a></div>'
+        );
+        infowindow.open(map);
+        setTimeout(function() {
+          var delLink = document.getElementById('deleteRouteLink');
+          if (delLink) {
+            delLink.addEventListener('click', function(e) {
+              e.preventDefault();
+              savedRoutes = savedRoutes.filter(function(r) { return r._id !== route._id; });
+              persistSavedRoutes();
+              renderSavedRoutes();
+              infowindow.close();
+            });
+          }
+        }, 0);
+      });
+      savedRoutePolylines.push(polyline);
+    });
+  }
+
+  function containerPointFromTouch(touch) {
+    var rect = mapContainerEl.getBoundingClientRect();
+    return new kakao.maps.Point(touch.clientX - rect.left, touch.clientY - rect.top);
+  }
+
+  function handleDrawTouchStart(e) {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    var proj = map.getProjection();
+    var coord = proj.coordsFromContainerPoint(containerPointFromTouch(e.touches[0]));
+    activeDrawPoints = [coord];
+    activeDrawPolyline = new kakao.maps.Polyline({
+      map: map, path: [coord],
+      strokeWeight: currentDrawWeight, strokeColor: currentDrawColor,
+      strokeOpacity: 0.85, strokeStyle: 'solid'
+    });
+  }
+  function handleDrawTouchMove(e) {
+    if (!activeDrawPolyline || e.touches.length !== 1) return;
+    e.preventDefault();
+    var proj = map.getProjection();
+    var coord = proj.coordsFromContainerPoint(containerPointFromTouch(e.touches[0]));
+    activeDrawPoints.push(coord);
+    activeDrawPolyline.setPath(activeDrawPoints);
+  }
+  function handleDrawTouchEnd(e) {
+    if (!activeDrawPolyline) return;
+    if (activeDrawPoints.length >= 2) {
+      savedRoutes.push({
+        _id: genPlaceId(),
+        points: activeDrawPoints.map(function(c) { return [c.getLat(), c.getLng()]; }),
+        color: currentDrawColor,
+        weight: currentDrawWeight
+      });
+      persistSavedRoutes();
+    }
+    activeDrawPolyline.setMap(null);
+    activeDrawPolyline = null;
+    activeDrawPoints = null;
+    renderSavedRoutes();
+  }
+
+  function setDrawMode(on) {
+    drawModeActive = on;
+    document.getElementById('drawRouteBtn').classList.toggle('active', on);
+    map.setDraggable(!on);
+    map.setZoomable(!on);
+    if (on) {
+      mapContainerEl.addEventListener('touchstart', handleDrawTouchStart, { passive: false });
+      mapContainerEl.addEventListener('touchmove', handleDrawTouchMove, { passive: false });
+      mapContainerEl.addEventListener('touchend', handleDrawTouchEnd);
+      mapContainerEl.addEventListener('touchcancel', handleDrawTouchEnd);
+    } else {
+      mapContainerEl.removeEventListener('touchstart', handleDrawTouchStart);
+      mapContainerEl.removeEventListener('touchmove', handleDrawTouchMove);
+      mapContainerEl.removeEventListener('touchend', handleDrawTouchEnd);
+      mapContainerEl.removeEventListener('touchcancel', handleDrawTouchEnd);
+    }
+  }
+
+  var drawBtnPressTimer = null;
+  var drawBtnLongPressed = false;
+  var drawRouteBtnEl = document.getElementById('drawRouteBtn');
+
+  drawRouteBtnEl.addEventListener('touchstart', function(e) {
+    drawBtnLongPressed = false;
+    drawBtnPressTimer = setTimeout(function() {
+      drawBtnLongPressed = true;
+      openDrawSettingsPanel();
+    }, 900);
+  }, { passive: true });
+  drawRouteBtnEl.addEventListener('touchend', function(e) {
+    clearTimeout(drawBtnPressTimer);
+    if (!drawBtnLongPressed) {
+      setDrawMode(!drawModeActive);
+    }
+  });
+  drawRouteBtnEl.addEventListener('touchcancel', function() {
+    clearTimeout(drawBtnPressTimer);
+  });
+  // 마우스(PC) 대응
+  drawRouteBtnEl.addEventListener('click', function() {
+    if (!('ontouchstart' in window)) setDrawMode(!drawModeActive);
+  });
+
+  function openDrawSettingsPanel() {
+    document.getElementById('drawSettingsOverlay').classList.add('open');
+    document.querySelectorAll('.drawColorSwatch').forEach(function(el) {
+      el.classList.toggle('selected', el.dataset.color === currentDrawColor);
+    });
+    document.querySelectorAll('.drawWeightBtn').forEach(function(el) {
+      el.classList.toggle('selected', Number(el.dataset.weight) === currentDrawWeight);
+    });
+  }
+  document.getElementById('drawSettingsCloseBtn').addEventListener('click', function() {
+    document.getElementById('drawSettingsOverlay').classList.remove('open');
+  });
+  document.getElementById('drawSettingsOverlay').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+  document.querySelectorAll('.drawColorSwatch').forEach(function(el) {
+    el.addEventListener('click', function() {
+      currentDrawColor = el.dataset.color;
+      document.querySelectorAll('.drawColorSwatch').forEach(function(s) { s.classList.remove('selected'); });
+      el.classList.add('selected');
+      persistDrawSettings();
+    });
+  });
+  document.querySelectorAll('.drawWeightBtn').forEach(function(el) {
+    el.addEventListener('click', function() {
+      currentDrawWeight = Number(el.dataset.weight);
+      document.querySelectorAll('.drawWeightBtn').forEach(function(s) { s.classList.remove('selected'); });
+      el.classList.add('selected');
+      persistDrawSettings();
+    });
+  });
+
+  loadDrawSettings();
+  loadSavedRoutes();
+  renderSavedRoutes();
+  // ===== 손그림 경로 그리기 끝 =====
+
+  // ===== 저장목록 패널 높이 드래그 조절 =====
+  (function() {
+    var handle = document.getElementById('savedListResizeHandle');
+    var panel = document.getElementById('savedListPanel');
+    var startY = 0;
+    var startHeight = 0;
+
+    function loadPanelHeight() {
+      try {
+        var saved = localStorage.getItem('savedListPanelHeightVh');
+        if (saved) panel.style.height = saved + 'vh';
+      } catch (e) {}
+    }
+    function persistPanelHeight(vh) {
+      try { localStorage.setItem('savedListPanelHeightVh', String(vh)); } catch (e) {}
+    }
+
+    function onMove(clientY) {
+      var deltaPx = startY - clientY; // 위로 끌면 양수(커짐)
+      var deltaVh = (deltaPx / window.innerHeight) * 100;
+      var newVh = startHeight + deltaVh;
+      newVh = Math.max(15, Math.min(92, newVh));
+      panel.style.height = newVh + 'vh';
+    }
+    function onEnd() {
+      var currentVh = parseFloat(panel.style.height) || 60;
+      persistPanelHeight(currentVh);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onEnd);
+    }
+    function onTouchMove(e) {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      onMove(e.touches[0].clientY);
+    }
+    function onMouseMove(e) { onMove(e.clientY); }
+
+    function beginDrag(clientY) {
+      startY = clientY;
+      startHeight = parseFloat(panel.style.height) ||
+        (panel.getBoundingClientRect().height / window.innerHeight * 100);
+      panel.style.height = startHeight + 'vh';
+    }
+
+    handle.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      beginDrag(e.touches[0].clientY);
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    }, { passive: false });
+
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      beginDrag(e.clientY);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onEnd);
+    });
+
+    loadPanelHeight();
+  })();
+  // ===== 저장목록 패널 높이 드래그 조절 끝 =====
 </script>
 
 </body>
