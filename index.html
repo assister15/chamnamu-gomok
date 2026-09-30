@@ -2280,7 +2280,8 @@
         roadview = new kakao.maps.Roadview(document.getElementById('roadviewContainer'));
         roadviewMinimap = new kakao.maps.Map(document.getElementById('roadviewMinimap'), {
           center: latlng,
-          level: 3
+          level: 3,
+          mapTypeId: kakao.maps.MapTypeId.HYBRID // 위성사진 + 지명 표시
         });
         roadviewMinimapMarker = new kakao.maps.Marker({ map: roadviewMinimap, position: latlng });
 
