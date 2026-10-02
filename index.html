@@ -196,7 +196,7 @@
   .swatchLevel5 { background: #422163; }
   .cityLabel {
     pointer-events: none; user-select: none; -webkit-user-select: none;
-    white-space: nowrap; font-size: 12px; font-weight: 700; color: #333; opacity: 0.8;
+    white-space: nowrap; font-size: 24px; font-weight: 700; color: #333; opacity: 0.55;
     text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0 0 3px #fff;
   }
   #groupSettingsPanel .panelDivider { border-top: 1px solid #ddd; margin: 16px 0 12px; }
@@ -2556,7 +2556,7 @@
       if (showLabels && inView) {
         var pos = new kakao.maps.LatLng(c.l[1], c.l[0]);
         var p = proj.containerPointFromCoords(pos);
-        var w = c.n.length * 12 + 8, h = 16;
+        var w = c.n.length * 24 + 8, h = 28;
         var sw = proj.containerPointFromCoords(new kakao.maps.LatLng(c.b[1], c.b[0]));
         var ne = proj.containerPointFromCoords(new kakao.maps.LatLng(c.b[3], c.b[2]));
         var cityPxW = Math.abs(ne.x - sw.x);
