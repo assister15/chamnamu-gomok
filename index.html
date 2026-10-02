@@ -194,6 +194,13 @@
   .swatchLevel3 { background: #7f40bf; }
   .swatchLevel4 { background: #613091; }
   .swatchLevel5 { background: #422163; }
+  .cityLabel {
+    pointer-events: none; user-select: none; -webkit-user-select: none;
+    white-space: nowrap; font-size: 12px; font-weight: 700; color: #333; opacity: 0.8;
+    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0 0 3px #fff;
+  }
+  #groupSettingsPanel .panelDivider { border-top: 1px solid #ddd; margin: 16px 0 12px; }
+  #groupSettingsPanel .groupHint { font-size: 11px; color: #888; margin: -4px 0 6px 28px; }
   #groupSettingsPanel .panelBtnRow {
     display: flex; gap: 8px; margin-top: 14px;
   }
@@ -645,6 +652,7 @@
       <li><b>장소 저장</b> — 지도에서 원하는 위치를 1~2초 정도 꾹 누르고 있으면 저장 창이 뜹니다. 이름과 아이콘(별·동그라미·자동차)을 정하고 원하면 폴더를 골라 저장하세요.</li>
       <li><b>저장 장소 확인/수정/삭제</b> — 지도에 찍힌 아이콘을 누르면 말풍선이 뜹니다. 여기서 편집·삭제, 그리고 출발/도착 지정도 할 수 있어요.</li>
       <li><b>참나무 폴리곤 표시</b> — 🌳 버튼을 짧게 누르면 전체 표시 켜기/끄기, 1초 정도 꾹 누르면 수종·영급별로 원하는 것만 골라 보는 세부설정 창이 열립니다.</li>
+      <li><b>시·군 경계/지명</b> — 🌳 버튼을 1초 정도 꾹 눌러 세부설정 창을 열고 맨 아래 "시·군 경계와 지명 표시"를 체크하면, 시·군 단위 경계가 얇은 점선으로 표시되고 지도를 넓게 볼 때 시·군 이름이 중앙에 작게 뜹니다(구가 있는 시는 시 하나로 합쳐서 표시). 경계선과 글자는 터치가 통과해서 지도 조작에 방해되지 않으며, 지도를 껐다 켜면 항상 꺼진 상태로 시작합니다.</li>
       <li><b>경로 손그림</b> — ✏️ 버튼을 누르면 그리기 모드로 전환되어, 손가락으로 화면을 누른 채 그으면 그 경로(등산로 등)가 지도에 영구히 저장됩니다. 다시 누르면 그리기 모드 종료. 버튼을 1초 정도 꾹 누르면 색상·굵기를 정할 수 있고, 그려진 경로를 누르면 삭제할 수 있습니다.</li>
       <li><b>검색</b> — 좌측 상단 검색창에 장소명을 입력하면 결과 목록이 뜨고, 선택하면 그 위치로 지도가 이동합니다.</li>
       <li><b>로드뷰</b> — 검색 결과나 저장 장소의 말풍선에서 로드뷰 버튼을 누르면 거리뷰 화면이 열리고, 우측 하단 미니맵에 주변 숲 폴리곤도 함께 표시됩니다.</li>
@@ -705,6 +713,13 @@
       <button id="groupSelectAllBtn">전체 선택</button>
       <button id="groupSelectNoneBtn">전체 해제</button>
     </div>
+    <div class="panelDivider"></div>
+    <h3>행정구역 표시 설정</h3>
+    <label class="groupOption">
+      <input type="checkbox" id="cityBoundaryCheck">
+      시·군 경계와 지명 표시
+    </label>
+    <div class="groupHint">지도를 껐다 켜면 항상 꺼진 상태로 시작합니다.</div>
     <button class="panelCloseBtn" id="groupPanelCloseBtn">닫기</button>
   </div>
 </div>
@@ -2483,6 +2498,126 @@
     });
     renderVisiblePolygons();
   });
+
+  // ===== 시·군 경계 + 지명 (기본 꺼짐, 저장 안 함 → 앱을 다시 켜면 항상 꺼진 상태) =====
+  var cityBoundaryOn = false;
+  var cityData = null;          // city_boundary.json 내용 (처음 켤 때 한 번만 불러옴)
+  var cityLoading = false;
+  var CITY_LINE_MAX_LEVEL = 11;   // 이보다 더 멀리 축소하면 선 숨김(성능)
+  var CITY_LABEL_MIN_LEVEL = 6;   // 이보다 더 확대하면 지명 숨김
+  var CITY_LABEL_MAX_LEVEL = 11;  // 이보다 더 멀리 축소하면 지명 숨김
+
+  function cityBboxIntersects(b, bounds) {
+    var sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+    return !(b[2] < sw.getLng() || b[0] > ne.getLng() || b[3] < sw.getLat() || b[1] > ne.getLat());
+  }
+
+  function hideAllCityLayers() {
+    if (!cityData) return;
+    cityData.forEach(function(c) {
+      if (c._lines) c._lines.forEach(function(l) { l.setMap(null); });
+      if (c._label) c._label.setMap(null);
+    });
+  }
+
+  function renderCityBoundaries() {
+    if (!cityBoundaryOn) { hideAllCityLayers(); return; }
+    if (!cityData) { loadCityData(); return; }
+    var level = map.getLevel();
+    var bounds = map.getBounds();
+    var proj = map.getProjection();
+    var showLines = level <= CITY_LINE_MAX_LEVEL;
+    var showLabels = level >= CITY_LABEL_MIN_LEVEL && level <= CITY_LABEL_MAX_LEVEL;
+    var placed = [];   // 이미 놓인 지명의 화면상 사각형 (겹침 방지)
+
+    // 큰 시부터 먼저 자리 잡기 (data는 면적순이 아니라서 매번 정렬하지 않고 미리 정렬해 둠)
+    cityData.forEach(function(c) {
+      var inView = cityBboxIntersects(c.b, bounds);
+
+      // --- 선 ---
+      if (c._lines) {
+        c._lines.forEach(function(l) { l.setMap(inView && showLines ? map : null); });
+      } else if (inView && showLines) {
+        c._lines = c.p.map(function(ring) {
+          return new kakao.maps.Polyline({
+            map: map,
+            path: ring.map(function(pt) { return new kakao.maps.LatLng(pt[1], pt[0]); }),
+            strokeWeight: 1.5,
+            strokeColor: '#ff8f00',
+            strokeOpacity: 0.85,
+            strokeStyle: 'shortdash',
+            zIndex: 1
+          });
+        });
+      }
+
+      // --- 지명 ---
+      var showThis = false;
+      if (showLabels && inView) {
+        var pos = new kakao.maps.LatLng(c.l[1], c.l[0]);
+        var p = proj.containerPointFromCoords(pos);
+        var w = c.n.length * 12 + 8, h = 16;
+        var sw = proj.containerPointFromCoords(new kakao.maps.LatLng(c.b[1], c.b[0]));
+        var ne = proj.containerPointFromCoords(new kakao.maps.LatLng(c.b[3], c.b[2]));
+        var cityPxW = Math.abs(ne.x - sw.x);
+        var onScreen = p.x > 0 && p.y > 0 && p.x < mapContainer.clientWidth && p.y < mapContainer.clientHeight;
+        if (onScreen && cityPxW >= w * 1.3) {
+          var rect = { x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h / 2, y2: p.y + h / 2 };
+          var clash = placed.some(function(r) {
+            return !(rect.x2 < r.x1 || rect.x1 > r.x2 || rect.y2 < r.y1 || rect.y1 > r.y2);
+          });
+          if (!clash) {
+            placed.push(rect);
+            showThis = true;
+            if (!c._label) {
+              var el = document.createElement('div');
+              el.className = 'cityLabel';
+              el.textContent = c.n;
+              c._label = new kakao.maps.CustomOverlay({ position: pos, content: el, xAnchor: 0.5, yAnchor: 0.5, zIndex: 2, clickable: false });
+            }
+            c._label.setMap(map);
+          }
+        }
+      }
+      if (!showThis && c._label) c._label.setMap(null);
+    });
+  }
+
+  function loadCityData() {
+    if (cityLoading) return;
+    cityLoading = true;
+    fetch('city_boundary.json')
+      .then(function(res) {
+        if (!res.ok) throw new Error('city_boundary.json 없음');
+        return res.json();
+      })
+      .then(function(data) {
+        data.sort(function(a, b) { return b.a - a.a; });   // 큰 시부터
+        cityData = data;
+        cityLoading = false;
+        renderCityBoundaries();
+      })
+      .catch(function(err) {
+        cityLoading = false;
+        console.log('시·군 경계 파일을 불러오지 못했습니다.', err);
+        alert('시·군 경계 파일(city_boundary.json)을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');
+        cityBoundaryOn = false;
+        document.getElementById('cityBoundaryCheck').checked = false;
+      });
+  }
+
+  (function setupCityBoundary() {
+    var cb = document.getElementById('cityBoundaryCheck');
+    cb.checked = false;
+    cb.addEventListener('change', function() {
+      cityBoundaryOn = cb.checked;
+      renderCityBoundaries();
+    });
+    kakao.maps.event.addListener(map, 'idle', function() {
+      if (cityBoundaryOn) renderCityBoundaries();
+    });
+  })();
+
   document.getElementById('groupPanelCloseBtn').addEventListener('click', closeGroupSettingsPanel);
   document.getElementById('groupSettingsOverlay').addEventListener('click', function(e) {
     if (e.target.id === 'groupSettingsOverlay') closeGroupSettingsPanel();
