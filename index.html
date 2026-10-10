@@ -236,6 +236,18 @@
     max-width:80vw; text-align:center; opacity:0; pointer-events:none; transition:opacity 0.2s ease;
   }
   #appToast.show { opacity:1; }
+  #trailEditChip {
+    display:none; position:fixed; left:12px; bottom:124px; z-index:25;
+    background:#fff; border-radius:22px; box-shadow:0 2px 8px rgba(0,0,0,0.3);
+    padding:3px; gap:2px; align-items:center;
+  }
+  #trailEditChip button {
+    border:none; background:transparent; color:#4b1575; font-size:14px; font-weight:bold;
+    height:34px; padding:0 14px; border-radius:18px; cursor:pointer;
+    font-family:inherit; -webkit-user-select:none; user-select:none;
+  }
+  #trailEditChip button.sel { background:#7a3ea1; color:#fff; }
+  #trailEditChip button:disabled { color:#bbb; }
   #savedListBtn {
     position:fixed; bottom:70px; left:12px; z-index:20;
     width:44px; height:44px; border-radius:50%; border:none;
@@ -519,6 +531,11 @@
   <span id="trackTrailBadge">✏️</span>
 </button>
 <div id="appToast"></div>
+<div id="trailEditChip">
+  <button id="trailEditEraseBtn" type="button">지우기</button>
+  <button id="trailEditDrawBtn" type="button">그리기</button>
+  <button id="trailEditUndoBtn" type="button" disabled>↩ 되돌리기</button>
+</div>
 
 <button id="savedListBtn" title="저장한 장소 목록">
   <svg width="22" height="22" viewBox="0 0 24 24">
@@ -671,7 +688,7 @@
       <li><b>검색</b> — 좌측 상단 검색창에 장소명을 입력하면 결과 목록이 뜨고, 선택하면 그 위치로 지도가 이동합니다.</li>
       <li><b>로드뷰</b> — 검색 결과나 저장 장소의 말풍선에서 로드뷰 버튼을 누르면 거리뷰 화면이 열리고, 우측 하단 미니맵에 주변 숲 폴리곤도 함께 표시됩니다.</li>
       <li><b>실시간 위치 추적</b> — 우측 상단 화살표 버튼을 누르면 GPS로 내 위치와 이동 방향(화살표)이 실시간으로 표시됩니다.</li>
-      <li><b>지나간 길 그리기</b> — 우측 상단 위치추적 버튼(화살표)을 1초 정도 꾹 누르면 "지나간 길 그리기"가 켜지고(버튼 아래에 작은 연필 ✏️ 표시), 다시 꾹 누르면 꺼집니다. 켜 둔 상태에서 위치추적을 하면 내가 지나간 길이 흰 테두리가 있는 진한 파란 선으로 지도에 그려지고, 지도를 껐다 켜도 남아 있습니다. 앱을 다시 켜면 항상 꺼진 상태로 시작합니다(이미 그려진 길은 그대로 남습니다). 지우고 싶을 때는 그려진 길을 눌러 "이 경로 삭제"를 누르세요. 이 기록은 이 기기에만 저장되며 구글 로그인 동기화에는 포함되지 않습니다.</li>
+      <li><b>지나간 길 그리기</b> — 우측 상단 위치추적 버튼(화살표)을 1초 정도 꾹 누르면 "지나간 길 그리기"가 켜지고(버튼 아래에 작은 연필 ✏️ 표시), 다시 꾹 누르면 꺼집니다. 켜 둔 상태에서 위치추적을 하면 내가 지나간 길이 흰 테두리가 있는 진한 파란 선으로 지도에 그려지고, 지도를 껐다 켜도 남아 있습니다. 앱을 다시 켜면 항상 꺼진 상태로 시작합니다(이미 그려진 길은 그대로 남습니다). 지우고 싶을 때는 그려진 길을 눌러 "이 경로 삭제"를 누르세요. 이 기록은 이 기기에만 저장되며 구글 로그인 동기화에는 포함되지 않습니다.<br>지나간 길 그리기가 켜진 상태에서 좌측 하단 ✏️ 버튼을 누르면 "지나간 길 편집" 모드가 되어, 화면 왼쪽 아래에 [지우기 | 그리기 | ↩ 되돌리기] 선택칩이 나타납니다. 지우기(기본)는 손가락으로 문지른 곳의 길이 지워지고(선이 끊어질 수 있음), 그리기는 지나간 길과 같은 파란 선으로 직접 그어 이을 수 있습니다. 되돌리기는 직전 한 번의 편집을 취소합니다. ✏️를 다시 누르면 편집 모드가 끝나고, 지나간 길 그리기가 꺼진 상태에서는 ✏️가 이전처럼 일반 손그림으로 동작합니다.</li>
       <li><b>실시간 날씨</b> — 좌측 하단에 기상청 실측 데이터 기반 기온·하늘상태가 표시되고, 지도를 3km 이상 옮기면 그 지역 날씨로 자동 갱신됩니다.</li>
       <li><b>카카오맵 길찾기</b> — 저장 장소든 검색 결과로 찍힌 마커든, 말풍선에서 "출발로 설정"과 "도착으로 설정"을 각각 눌러 두 곳을 지정하면, 화면에 뜨는 "카카오맵으로 길찾기" 버튼으로 실제 자동차 소요시간을 확인할 수 있습니다.</li>
       <li><b>저장목록 순서 변경</b> — 저장한 장소 목록에서 항목 옆 ↕ 손잡이를 누른 채 위아래로 끌면 순서를 바꿀 수 있습니다.</li>
@@ -3624,6 +3641,7 @@
   function handleDrawTouchStart(e) {
     if (e.touches.length !== 1) return;
     e.preventDefault();
+    if (trailEditActive()) { trailEditTouchStart(e); return; }
     var proj = map.getProjection();
     var coord = proj.coordsFromContainerPoint(containerPointFromTouch(e.touches[0]));
     activeDrawPoints = [coord];
@@ -3634,6 +3652,7 @@
     });
   }
   function handleDrawTouchMove(e) {
+    if (trailEditGestureOn) { if (e.touches.length === 1) { e.preventDefault(); trailEditTouchMove(e); } return; }
     if (!activeDrawPolyline || e.touches.length !== 1) return;
     e.preventDefault();
     var proj = map.getProjection();
@@ -3642,6 +3661,7 @@
     activeDrawPolyline.setPath(activeDrawPoints);
   }
   function handleDrawTouchEnd(e) {
+    if (trailEditGestureOn) { trailEditTouchEnd(); return; }
     if (!activeDrawPolyline) return;
     if (activeDrawPoints.length >= 2) {
       savedRoutes.push({
@@ -3663,6 +3683,9 @@
     document.getElementById('drawRouteBtn').classList.toggle('active', on);
     map.setDraggable(!on);
     map.setZoomable(!on);
+    if (on) { trailEditMode = 'erase'; trailUndoSnapshot = null; }
+    updateTrailEditUI();
+    if (on && trailEditActive()) showAppToast('지나간 길 편집: 문질러서 지우기');
     if (on) {
       mapContainerEl.addEventListener('touchstart', handleDrawTouchStart, { passive: false });
       mapContainerEl.addEventListener('touchmove', handleDrawTouchMove, { passive: false });
@@ -3851,6 +3874,7 @@
     trailOn = on;
     trailCurrent = null;   // 켜거나 끌 때마다 새 구간부터
     document.getElementById('trackToggleBtn').classList.toggle('trailOn', trailOn);
+    updateTrailEditUI();
   }
 
   (function setupTrailLongPress() {
@@ -3881,6 +3905,207 @@
     btn.addEventListener('pointerleave', clear);
     btn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
   })();
+
+  // ----- 지나간 길 편집: 지나간 길 그리기가 켜진 상태에서 ✏️ 버튼을 켜면 [지우기 | 그리기 | 되돌리기] -----
+  var TRAIL_ERASE_RADIUS_PX = 26;       // 지우개 반지름(화면 픽셀)
+  var TRAIL_DRAW_MIN_PX = 3;            // 그리기 중 이만큼(px) 이상 움직였을 때만 점을 찍음
+  var trailEditMode = 'erase';          // 'erase' | 'draw'
+  var trailUndoSnapshot = null;         // 직전 편집 한 번을 되돌리기 위한 savedTrails 사본(JSON)
+  var trailEditGestureOn = false;       // 편집 손동작이 진행 중인지
+  var trailEditStartSnap = null;
+  var trailEraseCircle = null;
+  var trailEraseLast = null;            // 직전 터치 좌표 [lat, lng]
+  var trailEraseChanged = false;
+  var trailEraseRaf = false;
+  var trailDrawPts = null, trailDrawLine = null, trailDrawCasing = null, trailDrawLastPx = null;
+
+  function trailEditActive() { return drawModeActive && trailOn; }
+
+  function refreshTrailEditChip() {
+    document.getElementById('trailEditEraseBtn').classList.toggle('sel', trailEditMode === 'erase');
+    document.getElementById('trailEditDrawBtn').classList.toggle('sel', trailEditMode === 'draw');
+    document.getElementById('trailEditUndoBtn').disabled = !trailUndoSnapshot;
+  }
+  function updateTrailEditUI() {
+    var chip = document.getElementById('trailEditChip');
+    if (!chip) return;
+    var on = trailEditActive();
+    chip.style.display = on ? 'flex' : 'none';
+    if (on) refreshTrailEditChip();
+  }
+
+  // 점(0,0)에서 선분 a-b까지의 거리(m). 좌표는 [lat,lng], 기준점(plat,plng)을 원점으로 한 근사 평면에서 계산
+  function trailSegDistM(plat, plng, a, b) {
+    var k = Math.cos(plat * Math.PI / 180);
+    var ax = (a[1] - plng) * k * 111320, ay = (a[0] - plat) * 110540;
+    var bx = (b[1] - plng) * k * 111320, by = (b[0] - plat) * 110540;
+    var dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    var t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+    var cx = ax + t * dx, cy = ay + t * dy;
+    return Math.sqrt(cx * cx + cy * cy);
+  }
+  function trailPtDistM(plat, plng, a) {
+    var k = Math.cos(plat * Math.PI / 180);
+    var x = (a[1] - plng) * k * 111320, y = (a[0] - plat) * 110540;
+    return Math.sqrt(x * x + y * y);
+  }
+
+  // (lat,lng) 중심 반지름 r(m) 안의 길을 지움. 지워진 곳에서 선이 끊어져 여러 구간으로 나뉜다. 바뀌었으면 true
+  function trailEraseAt(lat, lng, r) {
+    var out = [], changed = false;
+    savedTrails.forEach(function(trail) {
+      var pts = trail.points;
+      if (!pts || pts.length < 2) { out.push(trail); return; }
+      var n = pts.length, removed = new Array(n), cut = new Array(n), any = false;
+      for (var i = 0; i < n; i++) {
+        removed[i] = trailPtDistM(lat, lng, pts[i]) <= r;
+        if (removed[i]) any = true;
+      }
+      for (var j = 0; j < n - 1; j++) {
+        cut[j] = removed[j] || removed[j + 1] || trailSegDistM(lat, lng, pts[j], pts[j + 1]) <= r;
+        if (cut[j]) any = true;
+      }
+      if (!any) { out.push(trail); return; }
+      changed = true;
+      if (trailCurrent && trailCurrent._id === trail._id) trailCurrent = null;
+      var runs = [], cur = [];
+      for (var q = 0; q < n; q++) {
+        if (removed[q]) { if (cur.length) runs.push(cur); cur = []; continue; }
+        if (q > 0 && cut[q - 1] && cur.length) { runs.push(cur); cur = []; }
+        cur.push(pts[q]);
+      }
+      if (cur.length) runs.push(cur);
+      var first = true;
+      runs.forEach(function(run) {
+        if (run.length < 2) return;
+        out.push({ _id: first ? trail._id : genPlaceId(), points: run });
+        first = false;
+      });
+    });
+    if (changed) savedTrails = out;
+    return changed;
+  }
+
+  function trailEditCoordFromTouch(e) {
+    var pt = containerPointFromTouch(e.touches[0]);
+    return { pt: pt, coord: map.getProjection().coordsFromContainerPoint(pt) };
+  }
+  function trailEraseRadiusM(pt) {
+    var proj = map.getProjection();
+    var a = proj.coordsFromContainerPoint(pt);
+    var b = proj.coordsFromContainerPoint(new kakao.maps.Point(pt.x + TRAIL_ERASE_RADIUS_PX, pt.y));
+    return haversineDistance(a.getLat(), a.getLng(), b.getLat(), b.getLng());
+  }
+  function trailEraseScheduleRender() {
+    if (trailEraseRaf) return;
+    trailEraseRaf = true;
+    requestAnimationFrame(function() { trailEraseRaf = false; renderTrails(); });
+  }
+
+  function trailEditTouchStart(e) {
+    trailEditGestureOn = true;
+    trailEditStartSnap = JSON.stringify(savedTrails);
+    var c = trailEditCoordFromTouch(e);
+    var lat = c.coord.getLat(), lng = c.coord.getLng();
+    if (trailEditMode === 'erase') {
+      var r = trailEraseRadiusM(c.pt);
+      trailEraseChanged = false;
+      trailEraseLast = [lat, lng];
+      trailEraseCircle = new kakao.maps.Circle({
+        map: map, center: c.coord, radius: r, strokeWeight: 1, strokeColor: '#e53935', strokeOpacity: 0.9,
+        fillColor: '#e53935', fillOpacity: 0.2, zIndex: 5
+      });
+      if (trailEraseAt(lat, lng, r)) { trailEraseChanged = true; trailEraseScheduleRender(); }
+    } else {
+      var rl = [Math.round(lat * 1e6) / 1e6, Math.round(lng * 1e6) / 1e6];
+      trailDrawPts = [rl];
+      trailDrawLastPx = { x: c.pt.x, y: c.pt.y };
+      var path = [c.coord];
+      trailDrawCasing = new kakao.maps.Polyline({
+        map: map, path: path, strokeWeight: TRAIL_CASING_WEIGHT, strokeColor: TRAIL_CASING_COLOR,
+        strokeOpacity: 0.9, strokeStyle: 'solid', zIndex: 1
+      });
+      trailDrawLine = new kakao.maps.Polyline({
+        map: map, path: path, strokeWeight: TRAIL_WEIGHT, strokeColor: TRAIL_COLOR,
+        strokeOpacity: 0.95, strokeStyle: 'solid', zIndex: 2
+      });
+    }
+  }
+
+  function trailEditTouchMove(e) {
+    var c = trailEditCoordFromTouch(e);
+    var lat = c.coord.getLat(), lng = c.coord.getLng();
+    if (trailEditMode === 'erase') {
+      if (!trailEraseCircle) return;
+      var r = trailEraseRadiusM(c.pt);
+      trailEraseCircle.setPosition(c.coord);
+      trailEraseCircle.setRadius(r);
+      // 손가락이 빨리 움직여도 건너뛰지 않도록 직전 위치와 지금 위치 사이를 촘촘히 훑는다
+      var from = trailEraseLast || [lat, lng];
+      var dist = haversineDistance(from[0], from[1], lat, lng);
+      var steps = Math.max(1, Math.ceil(dist / (r / 2)));
+      for (var s = 1; s <= steps; s++) {
+        var f = s / steps;
+        if (trailEraseAt(from[0] + (lat - from[0]) * f, from[1] + (lng - from[1]) * f, r)) trailEraseChanged = true;
+      }
+      trailEraseLast = [lat, lng];
+      if (trailEraseChanged) trailEraseScheduleRender();
+    } else {
+      if (!trailDrawLine) return;
+      var dx = c.pt.x - trailDrawLastPx.x, dy = c.pt.y - trailDrawLastPx.y;
+      if (Math.sqrt(dx * dx + dy * dy) < TRAIL_DRAW_MIN_PX) return;
+      trailDrawLastPx = { x: c.pt.x, y: c.pt.y };
+      trailDrawPts.push([Math.round(lat * 1e6) / 1e6, Math.round(lng * 1e6) / 1e6]);
+      var path = trailDrawPts.map(function(p) { return new kakao.maps.LatLng(p[0], p[1]); });
+      trailDrawCasing.setPath(path);
+      trailDrawLine.setPath(path);
+    }
+  }
+
+  function trailEditTouchEnd() {
+    trailEditGestureOn = false;
+    var changed = false;
+    if (trailEditMode === 'erase') {
+      if (trailEraseCircle) { trailEraseCircle.setMap(null); trailEraseCircle = null; }
+      trailEraseLast = null;
+      changed = trailEraseChanged;
+      trailEraseChanged = false;
+    } else {
+      if (trailDrawLine) { trailDrawLine.setMap(null); trailDrawLine = null; }
+      if (trailDrawCasing) { trailDrawCasing.setMap(null); trailDrawCasing = null; }
+      if (trailDrawPts && trailDrawPts.length >= 2) {
+        savedTrails.push({ _id: genPlaceId(), points: trailDrawPts });
+        changed = true;
+      }
+      trailDrawPts = null; trailDrawLastPx = null;
+    }
+    if (changed) {
+      persistTrails();
+      renderTrails();
+      trailUndoSnapshot = trailEditStartSnap;
+      refreshTrailEditChip();
+    }
+    trailEditStartSnap = null;
+  }
+
+  function trailEditUndo() {
+    if (!trailUndoSnapshot) return;
+    try { savedTrails = JSON.parse(trailUndoSnapshot); } catch (e) { return; }
+    if (!Array.isArray(savedTrails)) savedTrails = [];
+    trailCurrent = null;
+    trailUndoSnapshot = null;
+    persistTrails();
+    renderTrails();
+    refreshTrailEditChip();
+    showAppToast('직전 편집을 되돌렸습니다');
+  }
+
+  (function setupTrailEditChip() {
+    document.getElementById('trailEditEraseBtn').addEventListener('click', function() { trailEditMode = 'erase'; refreshTrailEditChip(); });
+    document.getElementById('trailEditDrawBtn').addEventListener('click', function() { trailEditMode = 'draw'; refreshTrailEditChip(); });
+    document.getElementById('trailEditUndoBtn').addEventListener('click', trailEditUndo);
+  })();
+  // ----- 지나간 길 편집 끝 -----
 
   loadTrailState();
   document.getElementById('trackToggleBtn').classList.toggle('trailOn', trailOn);
