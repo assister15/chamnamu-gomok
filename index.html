@@ -67,6 +67,26 @@
   }
   #resultList div:hover { background:#f5f5f5; }
 
+  #liveSuggestList {
+    margin-top:4px; border:1px solid #eee; border-radius:4px;
+    max-height:260px; overflow-y:auto; display:none;
+  }
+  #liveSuggestList .sugItem {
+    padding:6px 8px; border-bottom:1px solid #f2f2f2; cursor:pointer;
+  }
+  #liveSuggestList .sugItem:last-child { border-bottom:none; }
+  #liveSuggestList .sugItem:hover { background:#f5f5f5; }
+  #liveSuggestList .sugTop { display:flex; align-items:baseline; gap:6px; }
+  #liveSuggestList .sugTitle {
+    flex:1; min-width:0; font-size:13px; font-weight:bold; color:#222;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  #liveSuggestList .sugDist { flex:none; font-size:11px; color:#1565c0; }
+  #liveSuggestList .sugSub {
+    font-size:11px; color:#888; margin-top:1px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
   #recentSearchList {
     margin-top:4px; border:1px solid #eee; border-radius:4px;
     max-height:160px; overflow-y:auto;
@@ -521,6 +541,7 @@
   <div id="panelBody">
     <input type="text" id="keyword" placeholder="예: 원삼면 펜션, 두창저수지 등">
     <div id="recentSearchList" style="display:none;"></div>
+    <div id="liveSuggestList"></div>
     <button onclick="searchPlaces()">검색</button>
     <div id="resultList"></div>
   </div>
@@ -685,7 +706,7 @@
       <li><b>참나무 폴리곤 표시</b> — 🌳 버튼을 짧게 누르면 전체 표시 켜기/끄기, 1초 정도 꾹 누르면 수종·영급별로 원하는 것만 골라 보는 세부설정 창이 열립니다.</li>
       <li><b>시·군 경계/지명</b> — 🌳 버튼을 1초 정도 꾹 눌러 세부설정 창을 열고 맨 아래 "시·군 경계와 지명 표시"를 체크하면, 시·군 단위 경계가 얇은 점선으로 표시되고 지도를 넓게 볼 때 시·군 이름이 중앙에 작게 뜹니다(구가 있는 시는 시 하나로 합쳐서 표시). 경계선은 얇게, 글자는 터치가 통과하게 만들어 지도 조작에 방해되지 않으며, 지도를 껐다 켜면 항상 꺼진 상태로 시작합니다.</li>
       <li><b>경로 손그림</b> — ✏️ 버튼을 누르면 그리기 모드로 전환되어, 손가락으로 화면을 누른 채 그으면 그 경로(등산로 등)가 지도에 영구히 저장됩니다. 다시 누르면 그리기 모드 종료. 버튼을 1초 정도 꾹 누르면 색상·굵기를 정할 수 있고, 그려진 경로를 누르면 삭제할 수 있습니다.</li>
-      <li><b>검색</b> — 좌측 상단 검색창에 장소명을 입력하면 결과 목록이 뜨고, 선택하면 그 위치로 지도가 이동합니다.</li>
+      <li><b>검색</b> — 좌측 상단 검색창에 장소명을 입력하면 결과 목록이 뜨고, 선택하면 그 위치로 지도가 이동합니다. 글자를 입력하는 동안에도 장소 목록이 바로 아래에 나타나며(이름·분류·주소와, 이름 오른쪽에 현재 지도 중심으로부터의 거리), 항목을 누르면 그 장소로 이동합니다. 주소 검색까지 함께 보려면 검색 버튼이나 Enter를 누르세요.</li>
       <li><b>로드뷰</b> — 검색 결과나 저장 장소의 말풍선에서 로드뷰 버튼을 누르면 거리뷰 화면이 열리고, 우측 하단 미니맵에 주변 숲 폴리곤도 함께 표시됩니다.</li>
       <li><b>실시간 위치 추적</b> — 우측 상단 화살표 버튼을 누르면 GPS로 내 위치와 이동 방향(화살표)이 실시간으로 표시됩니다.</li>
       <li><b>지나간 길 그리기</b> — 우측 상단 위치추적 버튼(화살표)을 1초 정도 꾹 누르면 "지나간 길 그리기"가 켜지고(버튼 아래에 작은 연필 ✏️ 표시), 다시 꾹 누르면 꺼집니다. 켜 둔 상태에서 위치추적을 하면 내가 지나간 길이 흰 테두리가 있는 진한 파란 선으로 지도에 그려지고, 지도를 껐다 켜도 남아 있습니다. 앱을 다시 켜면 항상 꺼진 상태로 시작합니다(이미 그려진 길은 그대로 남습니다). 지우고 싶을 때는 그려진 길을 눌러 "이 경로 삭제"를 누르세요. 이 기록은 이 기기에만 저장되며 구글 로그인 동기화에는 포함되지 않습니다.<br>지나간 길 그리기가 켜진 상태에서 좌측 하단 ✏️ 버튼을 누르면 "지나간 길 편집" 모드가 되어, 화면 왼쪽 아래에 [지우기 | 그리기 | ↩ 되돌리기] 선택칩이 나타납니다. 지우기(기본)는 손가락으로 문지른 곳의 길이 지워지고(선이 끊어질 수 있음), 그리기는 지나간 길과 같은 파란 선으로 직접 그어 이을 수 있습니다. 되돌리기는 직전 한 번의 편집을 취소합니다. ✏️를 다시 누르면 편집 모드가 끝나고, 지나간 길 그리기가 꺼진 상태에서는 ✏️가 이전처럼 일반 손그림으로 동작합니다.</li>
@@ -845,6 +866,7 @@
     btn.textContent = '▼ 검색';
     document.getElementById('keyword').value = '';
     document.getElementById('resultList').innerHTML = '';
+    hideLiveSuggest();
   }
 
   function escapeHtml(str) {
@@ -1755,6 +1777,7 @@
 
     saveRecentSearch(keyword);
     hideRecentSearches();
+    hideLiveSuggest();
 
     var combined = [];
     var doneCount = 0;
@@ -1866,11 +1889,103 @@
       document.getElementById('resultList').innerHTML = '';
       searchMarkers.forEach(function(m) { m.setMap(null); });
       searchMarkers = [];
+      hideLiveSuggest();
       renderRecentSearches();
     } else {
       hideRecentSearches();
+      scheduleLiveSuggest();
     }
   });
+
+  // ===== 입력 중 실시간 장소 목록 (글자를 치는 동안 장소 검색 결과를 바로 보여줌) =====
+  var LIVE_SUGGEST_DELAY_MS = 300;   // 타이핑이 이만큼 멈추면 검색
+  var LIVE_SUGGEST_SIZE = 8;
+  var liveSuggestTimer = null;
+  var liveSuggestSeq = 0;            // 늦게 도착한 오래된 응답을 버리기 위한 번호
+  var liveSuggestItems = [];
+
+  function hideLiveSuggest() {
+    clearTimeout(liveSuggestTimer);
+    liveSuggestSeq++;                // 진행 중이던 요청의 응답도 무시
+    liveSuggestItems = [];
+    var el = document.getElementById('liveSuggestList');
+    if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  }
+
+  function formatSuggestDistance(m) {
+    if (!isFinite(m)) return '';
+    if (m < 1000) return Math.round(m) + 'm';
+    if (m < 10000) return (m / 1000).toFixed(1) + 'km';
+    return Math.round(m / 1000) + 'km';
+  }
+
+  function scheduleLiveSuggest() {
+    clearTimeout(liveSuggestTimer);
+    liveSuggestTimer = setTimeout(runLiveSuggest, LIVE_SUGGEST_DELAY_MS);
+  }
+
+  function runLiveSuggest() {
+    var keyword = document.getElementById('keyword').value.trim();
+    if (!keyword) { hideLiveSuggest(); return; }
+    var mySeq = ++liveSuggestSeq;
+    var center = map.getCenter();   // 거리는 지금 지도 화면 중심 기준
+    var cLat = center.getLat(), cLng = center.getLng();
+    ps.keywordSearch(keyword, function(data, status) {
+      if (mySeq !== liveSuggestSeq) return;   // 그 사이 더 새로운 입력/검색이 있었음
+      var el = document.getElementById('liveSuggestList');
+      if (status !== kakao.maps.services.Status.OK || !data || data.length === 0) {
+        liveSuggestItems = [];
+        el.innerHTML = '';
+        el.style.display = 'none';
+        return;
+      }
+      var items = data.map(function(place) {
+        var cat = place.category_group_name || '';
+        if (!cat && place.category_name) {
+          var parts = place.category_name.split('>');
+          cat = parts[parts.length - 1].trim();
+        }
+        return {
+          title: place.place_name,
+          subtitle: place.address_name,
+          x: place.x,
+          y: place.y,
+          category: cat,
+          distM: haversineDistance(cLat, cLng, parseFloat(place.y), parseFloat(place.x))
+        };
+      });
+      // 예전에 선택했던 장소는 위로(기존 검색 결과와 같은 규칙), 나머지는 카카오 관련도순 유지
+      items = items
+        .map(function(item, i) { return { item: item, i: i, hits: placeSelectionHistory[placeHistoryKey(item)] || 0 }; })
+        .sort(function(a, b) { return b.hits !== a.hits ? b.hits - a.hits : a.i - b.i; })
+        .map(function(entry) { return entry.item; });
+      liveSuggestItems = items;
+      var html = '';
+      items.forEach(function(item, i) {
+        var sub = [item.category, item.subtitle].filter(Boolean).join(' · ');
+        html += '<div class="sugItem" data-idx="' + i + '">' +
+          '<div class="sugTop"><div class="sugTitle">' + escapeHtml(item.title) + '</div>' +
+          '<div class="sugDist">' + escapeHtml(formatSuggestDistance(item.distM)) + '</div></div>' +
+          '<div class="sugSub">' + escapeHtml(sub) + '</div></div>';
+      });
+      el.innerHTML = html;
+      el.style.display = 'block';
+    }, { size: LIVE_SUGGEST_SIZE });
+  }
+
+  document.getElementById('liveSuggestList').addEventListener('click', function(e) {
+    var itemEl = e.target.closest ? e.target.closest('.sugItem') : null;
+    if (!itemEl) return;
+    var item = liveSuggestItems[parseInt(itemEl.getAttribute('data-idx'), 10)];
+    if (!item) return;
+    // 검색 결과 목록의 항목을 눌렀을 때와 같은 동작: 마커를 찍고(말풍선에서 출발/도착 지정 가능) 그 위치로 이동
+    var pos = new kakao.maps.LatLng(item.y, item.x);
+    renderCombinedResults([{ title: item.title, subtitle: item.subtitle, x: item.x, y: item.y }]);
+    collapsePanel();
+    recordPlaceSelection(item);
+    goToMapTarget(pos, 4);
+  });
+  // ===== 입력 중 실시간 장소 목록 끝 =====
 
   loadRecentSearches();
 
