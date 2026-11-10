@@ -3402,7 +3402,10 @@
   loadSavedFolders();
   loadSavedPlaces();
 
-  if (!savedView && navigator.geolocation) {
+  // 처음 열 때 위치 권한 팝업을 사용자 동작 없이 띄우지 않는다.
+  // 이미 위치 권한을 허용해 둔 기기에서만 조용히 현재 위치로 이동하고,
+  // 그렇지 않으면 기본 위치에서 바로 연다. (위치는 📍/추적 버튼을 눌렀을 때만 요청)
+  function startupLocate() {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
         var here = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
@@ -3428,8 +3431,17 @@
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
-  } else if (!savedView) {
-    hideSplash();
+  }
+
+  if (!savedView) {
+    if (navigator.geolocation && navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then(function(st) {
+        if (st.state === 'granted') startupLocate();
+        else hideSplash();
+      }).catch(function() { hideSplash(); });
+    } else {
+      hideSplash();
+    }
   }
 
   // ===== 구글 로그인 + 드라이브 동기화 (전부 선택사항) =====
